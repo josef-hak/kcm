@@ -102,6 +102,9 @@ digraph cluster_layout {
         kcm_rbac  [fillcolor="#cfe6c0", label="kcm-rbac-manager"];
         kcm_rel   [fillcolor="#cfe6c0", label="kcm-reloader"];
         kcm_vel   [fillcolor="#cfe6c0", label="velero"];
+        // only rendered when telemetry.mode is not "disabled"
+        kcm_tel   [fillcolor="#cfe6c0", style="filled,dashed", color="#8fae7f",
+                   label="telemetry\n(unless mode=disabled)"];
       }
     }
   }
@@ -112,7 +115,7 @@ digraph cluster_layout {
   // Invisible chains: without them the members of a column land on one rank and
   // the "columns" come out as rows.
   edge [style=invis, weight=10];
-  kcm_mgr -> kcm_src -> kcm_helm -> kcm_capi -> kcm_capiop -> kcm_cert -> kcm_rbac -> kcm_rel -> kcm_vel;
+  kcm_mgr -> kcm_src -> kcm_helm -> kcm_capi -> kcm_capiop -> kcm_cert -> kcm_rbac -> kcm_rel -> kcm_vel -> kcm_tel;
   crd_inst -> crd_tpl -> crd_cd -> crd_ksm -> crd_flux -> crd_capi -> crd_vel;
   sv_addon -> sv_access -> sv_shard -> sv_agent -> sv_rest;
   crd_sv_cfg -> crd_sv_lib;

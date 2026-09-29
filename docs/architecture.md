@@ -15,7 +15,7 @@ installs and then depends on.
 | Workload | Role |
 |---|---|
 | **kcm-controller-manager** | Every KCM controller, plus the admission webhook server. Leader-elected, so one replica reconciles at a time. |
-| **telemetry** | Collects usage data on a timer. Runs `disabled`, `local` (writes to a directory) or `online`, so an air-gapped install can turn it off without patching anything. |
+| **telemetry** | Collects usage data on a timer. Runs `disabled`, `local` (writes to a directory) or `online`; on `disabled` the deployment is not rendered at all, so an air-gapped install carries nothing extra. |
 | **source-controller**, **helm-controller** (Flux) | Resolve chart references and install every `HelmRelease` KCM renders — provider components, cluster charts, templates. |
 | **capi-controller-manager** + infrastructure providers | Provision and manage the lifecycle of child clusters. |
 | **cluster-api-operator** | Installs and upgrades the CAPI providers themselves. |
