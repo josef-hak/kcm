@@ -11,6 +11,8 @@
 digraph cluster_layout {
   rankdir=TB;
   compound=true;
+  ranksep=0.18;
+  nodesep=0.25;
   fontname="Helvetica";
   graph [fontname="Helvetica"];
   node [fontname="Helvetica", fontsize=9, shape=box, style="filled", color="#00000000", margin="0.12,0.06"];
@@ -28,8 +30,8 @@ digraph cluster_layout {
     // ================= kcm-system =====================================
     subgraph cluster_kubesystem {
       label="namespace: kube-system";
-      fontsize=12; labeljust="l";
-      style="rounded,filled"; fillcolor="#f2f2f2"; color="#cccccc";
+      fontsize=15; labeljust="l"; penwidth=3;
+      style="rounded,filled"; fillcolor="#f0f0f0"; color="#999999";
 
       subgraph cluster_ks_wl {
         label="Deployments and DaemonSets";
@@ -44,8 +46,8 @@ digraph cluster_layout {
 
     subgraph cluster_sveltos {
       label="namespace: projectsveltos";
-      fontsize=12; labeljust="l";
-      style="rounded,filled"; fillcolor="#faf3e0"; color="#e0d6b8";
+      fontsize=15; labeljust="l"; penwidth=3;
+      style="rounded,filled"; fillcolor="#fbf1da"; color="#c9a552";
 
       subgraph cluster_sv_crd {
         label="CRDs owned here (cluster-scoped)";
@@ -71,8 +73,8 @@ digraph cluster_layout {
 
     subgraph cluster_kcmsystem {
       label="namespace: kcm-system";
-      fontsize=12; labeljust="l";
-      style="rounded,filled"; fillcolor="#eef4ea"; color="#a8c898";
+      fontsize=15; labeljust="l"; penwidth=3;
+      style="rounded,filled"; fillcolor="#e6f0e0"; color="#5f9448";
 
       subgraph cluster_kcm_crd {
         label="CRDs owned here (cluster-scoped)";
@@ -120,12 +122,12 @@ digraph cluster_layout {
   sv_addon -> sv_access -> sv_shard -> sv_agent -> sv_rest;
   crd_sv_cfg -> crd_sv_lib;
   ks_dns -> ks_ms -> ks_net;
+  sv_rest -> ks_dns;   // puts kube-system under projectsveltos
   edge [style=solid, weight=1];
 
 
   // ---- only what crosses a namespace ------------------------------------
   kcm_mgr -> crd_flux  [constraint=false, label="renders HelmRelease"];
-  kcm_helm -> sv_addon [constraint=false, lhead=cluster_sveltos, label="installs Sveltos"];
   kcm_mgr -> crd_sv_cfg [constraint=false, label="writes Profile"];
   crd_sv_cfg -> sv_addon [constraint=false, label="acted on by"];
   sv_addon -> Child [constraint=false, label="installs services"];
