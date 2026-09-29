@@ -1,0 +1,66 @@
+// Service delivery (KSM). Render with:
+//   dot -Tsvg docs/architecture-ksm.dot -o docs/architecture-ksm.svg
+//
+// ServiceSet is the boundary: everything above it is provider-agnostic, and
+// only the adapter below it knows how services actually get deployed. Dashed
+// edges are the confirmation that has to come back before the next hop of a
+// ServiceTemplateChain, or the next service in a dependsOn chain, starts.
+
+digraph ksm {
+  rankdir=TB;
+  nodesep=0.45;
+  ranksep=0.65;
+  fontname="Helvetica";
+  node [fontname="Helvetica", fontsize=10, shape=box, style="rounded,filled", color="#00000000"];
+  edge [fontname="Helvetica", fontsize=9, color="#555555"];
+
+  subgraph cluster_user {
+    label="User intent";
+    labeljust="l"; fontsize=11;
+    style="rounded,filled"; fillcolor="#f5f5f5"; color="#cccccc";
+    MCS      [fillcolor="#dce8f7", label="MultiClusterService"];
+    CD       [fillcolor="#dce8f7", label="ClusterDeployment\nwith services"];
+    Chains   [fillcolor="#dce8f7", label="ServiceTemplates\n+ ServiceTemplateChains"];
+    SMP      [fillcolor="#dce8f7", label="StateManagementProvider"];
+  }
+
+  subgraph cluster_agnostic {
+    label="Provider-agnostic";
+    labeljust="l"; fontsize=11;
+    style="rounded,filled"; fillcolor="#eef6ee"; color="#bcd6bc";
+    MCSC [fillcolor="#cfe6cf", label="MultiClusterService\ncontroller\nselects clusters, orders\ndependsOn, picks next hop"];
+    CDC  [fillcolor="#cfe6cf", label="ClusterDeployment\ncontroller"];
+    SMPC [fillcolor="#cfe6cf", label="StateManagementProvider\ncontroller"];
+  }
+
+  ServiceSet [fillcolor="#c5d9f1", penwidth=2, color="#5a7ca8",
+              label="ServiceSet\nthe provider boundary:\none per cluster, resolved versions"];
+
+  subgraph cluster_provider {
+    label="Provider-specific";
+    labeljust="l"; fontsize=11;
+    style="rounded,filled"; fillcolor="#e6f2e6"; color="#a8cfa8";
+    Adapter [fillcolor="#a8cfa8", label="Sveltos adapter\ntranslates, then verifies"];
+  }
+
+  Sveltos [fillcolor="#f3e2b8", label="Projectsveltos\naddon controller"];
+  Child   [fillcolor="#e8dcf7", shape=box3d, label="Child cluster"];
+
+  MCS    -> MCSC;
+  CD     -> CDC;
+  Chains -> MCSC [style=dotted, label="which upgrades\nare permitted"];
+  SMP    -> SMPC;
+
+  MCSC -> ServiceSet [label="one per\nmatching cluster"];
+  CDC  -> ServiceSet [label="services on\nthis cluster"];
+  SMPC -> ServiceSet [style=dashed, label="gate on adapter,\nprovisioner, CRDs"];
+
+  ServiceSet -> Adapter [label="desired services"];
+  Adapter -> Sveltos    [label="Profile / ClusterProfile\nwith helm charts"];
+  Sveltos -> Child      [label="installs services"];
+
+  Sveltos -> Adapter    [style=dashed, label="ClusterSummary,\nClusterConfiguration"];
+  Child   -> Adapter    [style=dashed, label="health rules evaluated\non the target cluster"];
+  Adapter -> ServiceSet [style=dashed, label="per-service state,\nconfirmed version"];
+  ServiceSet -> MCSC    [style=dashed, label="next hop /\nnext dependant unblocked"];
+}

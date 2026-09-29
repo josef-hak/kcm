@@ -1,0 +1,60 @@
+// Installation and cluster provisioning. Render with:
+//   dot -Tsvg docs/architecture-install.dot -o docs/architecture-install.svg
+//
+// KCM renders intent into HelmReleases and lets Flux and Cluster API do the
+// work. Dashed edges are the status that gates progress.
+
+digraph install {
+  rankdir=TB;
+  nodesep=0.45;
+  ranksep=0.7;
+  fontname="Helvetica";
+  node [fontname="Helvetica", fontsize=10, shape=box, style="rounded,filled", color="#00000000"];
+  edge [fontname="Helvetica", fontsize=9, color="#555555"];
+
+  subgraph cluster_user {
+    label="User intent";
+    labeljust="l"; fontsize=11;
+    style="rounded,filled"; fillcolor="#f5f5f5"; color="#cccccc";
+    Management        [fillcolor="#dce8f7", label="Management + Region"];
+    Templates         [fillcolor="#dce8f7", label="Templates +\nTemplateChains"];
+    ClusterDeployment [fillcolor="#dce8f7", label="ClusterDeployment"];
+  }
+
+  subgraph cluster_mgr {
+    label="kcm-controller-manager";
+    labeljust="l"; fontsize=11;
+    style="rounded,filled"; fillcolor="#eef6ee"; color="#bcd6bc";
+    ReleaseC  [fillcolor="#cfe6cf", label="Release +\nManagement/Region"];
+    TemplateC [fillcolor="#cfe6cf", label="Template +\nTemplateChain"];
+    SupportC  [fillcolor="#cfe6cf", label="Credential, IPAM, RBAC,\nAccessManagement,\nManagementBackup"];
+    CDC       [fillcolor="#cfe6cf", label="ClusterDeployment"];
+  }
+
+  subgraph cluster_ext {
+    label="Installed by KCM, then depended on";
+    labeljust="l"; fontsize=11;
+    style="rounded,filled"; fillcolor="#faf3e0"; color="#e0d6b8";
+    Flux   [fillcolor="#f3e2b8", label="Flux\nsource + helm controller"];
+    CAPI   [fillcolor="#f3e2b8", label="Cluster API\n+ providers"];
+    Velero [fillcolor="#f3e2b8", label="Velero"];
+  }
+
+  Child [fillcolor="#e8dcf7", shape=box3d, label="Child cluster"];
+
+  Management -> ReleaseC;
+  Templates  -> TemplateC;
+  ClusterDeployment -> CDC;
+
+  SupportC -> CDC [style=dashed, label="gate on credential\nand IPAM"];
+
+  ReleaseC  -> Flux [label="HelmRelease per\nprovider component"];
+  TemplateC -> Flux [label="resolves charts,\nreads values schema"];
+  CDC       -> Flux [label="HelmRelease for\nthe cluster chart"];
+  SupportC  -> Velero [label="Backup"];
+
+  Flux -> CAPI   [label="installs providers,\napplies cluster objects"];
+  Flux -> Velero [label="installs"];
+  CAPI -> Child  [label="provisions"];
+  CAPI -> CDC    [style=dashed, label="Cluster status"];
+}
