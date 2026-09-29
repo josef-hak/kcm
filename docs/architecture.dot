@@ -1,33 +1,25 @@
 // Workloads in the management cluster and how they interact. Render with:
 //   dot -Tsvg docs/architecture.dot -o docs/architecture.svg
 //
+// Grouped by what each does, not by who installed it: the delivery path runs
+// left to right, and the workloads that only support it sit underneath.
+//
 // Solid edges are "acts on": A -> B means A writes objects B acts on.
 // Dashed edges are what comes back -- the status KCM waits on.
-//
-// The installation relationship is in the box label rather than as arrows:
-// Flux installs all of them the same way, and seven identical edges would
-// crowd out the interactions that actually differ.
 
 digraph kcm {
   rankdir=LR;
-  nodesep=0.5;
-  ranksep=1.1;
+  nodesep=0.4;
+  ranksep=0.9;
   fontname="Helvetica";
   node [fontname="Helvetica", fontsize=10, shape=box, style="rounded,filled", color="#00000000"];
   edge [fontname="Helvetica", fontsize=9, color="#555555"];
 
-  subgraph cluster_own {
-    label="KCM's own code";
-    labeljust="l"; fontsize=11;
-    style="rounded,filled"; fillcolor="#eef6ee"; color="#bcd6bc";
+  KCM [fillcolor="#a8cfa8", penwidth=2, color="#6da86d",
+       label="kcm-controller-manager\ncontrollers + admission webhook"];
 
-    KCM [fillcolor="#a8cfa8", penwidth=2, color="#6da86d",
-         label="kcm-controller-manager\ncontrollers + admission webhook"];
-    Telemetry [fillcolor="#cfe6cf", label="telemetry"];
-  }
-
-  subgraph cluster_installed {
-    label="Installed by Flux from the HelmReleases kcm-controller-manager renders";
+  subgraph cluster_delivery {
+    label="Delivery: turns what KCM renders into running things";
     labeljust="l"; fontsize=11;
     style="rounded,filled"; fillcolor="#faf3e0"; color="#e0d6b8";
 
@@ -35,33 +27,40 @@ digraph kcm {
     CAPIOp  [fillcolor="#f3e2b8", label="cluster-api-operator"];
     CAPI    [fillcolor="#f3e2b8", label="capi-controller-manager\n+ infrastructure providers"];
     Sveltos [fillcolor="#f3e2b8", label="addon-controller\n(Projectsveltos)"];
-    Velero  [fillcolor="#f3e2b8", label="velero"];
-    CertMgr [fillcolor="#f3e2b8", label="cert-manager"];
-    RBACMgr [fillcolor="#f3e2b8", label="rbac-manager"];
-    Reloader[fillcolor="#f3e2b8", label="reloader"];
+  }
+
+  subgraph cluster_support {
+    label="Supporting the management cluster itself";
+    labeljust="l"; fontsize=11;
+    style="rounded,filled"; fillcolor="#f2f2f2"; color="#cccccc";
+
+    CertMgr  [fillcolor="#e4e4e4", label="cert-manager"];
+    Reloader [fillcolor="#e4e4e4", label="reloader"];
+    RBACMgr  [fillcolor="#e4e4e4", label="rbac-manager"];
+    Velero   [fillcolor="#e4e4e4", label="velero"];
+    Telemetry[fillcolor="#e4e4e4", label="telemetry"];
   }
 
   Child [fillcolor="#e8dcf7", shape=box3d, label="Child clusters"];
 
-  // what KCM writes
-  KCM -> Flux    [label="HelmRelease"];
-  KCM -> Sveltos [label="Profile"];
-  KCM -> Velero  [label="Backup"];
-  KCM -> RBACMgr [label="RBAC objects"];
+  // the delivery path
+  KCM  -> Flux    [label="HelmRelease"];
+  Flux -> CAPIOp  [label="installs"];
+  Flux -> Sveltos [label="installs"];
+  CAPIOp -> CAPI  [label="installs and\nupgrades providers"];
+  KCM  -> Sveltos [label="Profile"];
+  CAPI -> Child   [label="provisions"];
+  Sveltos -> Child[label="installs services"];
 
   // what comes back
-  Sveltos  -> KCM [style=dashed, label="ClusterSummary"];
-  CAPI     -> KCM [style=dashed, label="Cluster status"];
-  CertMgr  -> KCM [style=dashed, label="webhook cert"];
-  Reloader -> KCM [style=dashed, label="restarts"];
+  CAPI    -> KCM [style=dashed, constraint=false, color="#b0b0b0", fontcolor="#909090", penwidth=0.8, label="Cluster status"];
+  Sveltos -> KCM [style=dashed, constraint=false, color="#b0b0b0", fontcolor="#909090", penwidth=0.8, label="ClusterSummary"];
+  Child   -> KCM [style=dashed, constraint=false, color="#b0b0b0", fontcolor="#909090", penwidth=0.8, label="health rules\nevaluated there"];
 
-  // between the installed components
-  CAPIOp -> CAPI [label="installs and\nupgrades providers"];
-
-  // out to the child clusters
-  CAPI    -> Child [label="provisions"];
-  Sveltos -> Child [label="installs services"];
-  Child   -> KCM   [style=dashed, label="health rules\nevaluated there"];
-
-  Telemetry -> KCM [style=dotted, label="reads usage"];
+  // supporting workloads
+  KCM -> Velero   [label="Backup"];
+  KCM -> RBACMgr  [label="RBAC objects"];
+  CertMgr  -> KCM [style=dashed, constraint=false, color="#b0b0b0", fontcolor="#909090", penwidth=0.8, label="webhook cert"];
+  Reloader -> KCM [style=dashed, constraint=false, color="#b0b0b0", fontcolor="#909090", penwidth=0.8, label="restarts"];
+  KCM -> Telemetry[style=dotted, dir=back, color="#b0b0b0", fontcolor="#909090", label="reads usage"];
 }

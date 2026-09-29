@@ -27,10 +27,11 @@ installs and then depends on.
 
 ![Workloads in the management cluster](architecture.svg)
 
-Solid edges are what `kcm-controller-manager` writes; dashed edges are what
-comes back, which is what most of its waiting is actually waiting on. Flux
-installs everything in the lower box, so those arrows are left out — seven
-identical ones would crowd out the interactions that differ.
+Grouped by what each workload does rather than by who installed it. The solid
+path runs left to right — KCM renders, Flux installs, Cluster API and Sveltos
+act on the child clusters. Dashed edges are what comes back, which is what most
+of KCM's waiting is actually waiting on; they are drawn faint so the path reads
+first.
 
 ## What kcm-controller-manager does
 
