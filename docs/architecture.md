@@ -25,6 +25,13 @@ installs and then depends on.
 | **rbac-manager** | Reconciles the RBAC objects KCM declares. |
 | **reloader** | Restarts components when their config or secrets change. |
 
+![Workloads in the management cluster](architecture.svg)
+
+Solid edges are what `kcm-controller-manager` writes; dashed edges are what
+comes back, which is what most of its waiting is actually waiting on. Flux
+installs everything in the lower box, so those arrows are left out — seven
+identical ones would crowd out the interactions that differ.
+
 ## What kcm-controller-manager does
 
 One process, many controllers. They fall into three groups.
@@ -53,23 +60,23 @@ and is valid, that a config matches its values schema, that an upgrade is
 permitted by the chain, and that objects are not deleted while others still
 depend on them.
 
-## Service delivery
+## The service delivery seam
 
-![Service delivery](architecture-ksm.svg)
+`ServiceSet` is where KCM stops being provider-specific. Above it nothing knows
+what Sveltos is; below it the adapter inside `kcm-controller-manager` is the
+only part that does. Swapping the delivery mechanism means writing another
+adapter and another `StateManagementProvider`, not touching the controllers
+that decide which services belong where.
 
-`ServiceSet` is the seam. Above it nothing knows what Sveltos is; below it the
-adapter is the only component that does. Swapping the delivery mechanism means
-writing another adapter and another `StateManagementProvider`, not touching the
-controllers that decide which services belong where.
+A service counts as deployed only once Sveltos reports it *and* the adapter has
+evaluated the health rules against the target cluster, because Helm can report
+success before workloads are ready. Only then does the next hop of a
+`ServiceTemplateChain`, or the next service in a `dependsOn` chain, start.
 
-The dashed edges are the important part: a service counts as deployed only once
-Sveltos reports it *and* the adapter has evaluated the health rules against the
-target cluster, because Helm can report success before workloads are ready.
-Only then does the next hop of a chain, or the next service in a `dependsOn`
-chain, start.
+---
 
 The diagram is generated from the Graphviz source next to this file:
 
 ```sh
-dot -Tsvg docs/architecture-ksm.dot -o docs/architecture-ksm.svg
+dot -Tsvg docs/architecture.dot -o docs/architecture.svg
 ```
