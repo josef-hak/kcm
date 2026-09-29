@@ -166,20 +166,11 @@ KCM installs and then depends on these, rather than reimplementing them.
 
 ## How the pieces fit
 
-Two diagrams rather than one, because KCM runs two pipelines with different
-shapes: one gets components and clusters installed, the other keeps services
-running on them.
-
-### Installation and cluster provisioning
-
-![Installation and cluster provisioning](architecture-install.svg)
-
-Almost every arrow out of the manager is a `HelmRelease`. KCM decides *what*
-should be installed and hands the *how* to Flux, and from there to Cluster API.
-
-### Service delivery
-
 ![Service delivery](architecture-ksm.svg)
+
+The diagram covers service delivery, where the structure is worth drawing.
+Installation is a straight line by comparison — KCM renders a `HelmRelease`,
+Flux installs it, and for a cluster chart Cluster API takes over from there.
 
 `ServiceSet` is the seam. Above it nothing knows what Sveltos is; below it the
 adapter is the only component that does. Swapping the delivery mechanism means
@@ -192,11 +183,10 @@ target cluster, because Helm can report success before workloads are ready.
 Only then does the next hop of a chain, or the next service in a `dependsOn`
 chain, start.
 
-Both diagrams are generated from Graphviz sources next to this file:
+The diagram is generated from the Graphviz source next to this file:
 
 ```sh
-dot -Tsvg docs/architecture-install.dot -o docs/architecture-install.svg
-dot -Tsvg docs/architecture-ksm.dot     -o docs/architecture-ksm.svg
+dot -Tsvg docs/architecture-ksm.dot -o docs/architecture-ksm.svg
 ```
 
 ## Two flows worth following
