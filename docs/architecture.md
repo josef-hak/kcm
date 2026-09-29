@@ -27,11 +27,12 @@ installs and then depends on.
 
 ![Workloads in the management cluster](architecture.svg)
 
-Grouped by what each workload does rather than by who installed it. The solid
-path runs left to right — KCM renders, Flux installs, Cluster API and Sveltos
-act on the child clusters. Dashed edges are what comes back, which is what most
-of KCM's waiting is actually waiting on; they are drawn faint so the path reads
-first.
+One box per namespace, and inside each the workloads that run there alongside
+the CRDs they own. CRDs are cluster-scoped, so they sit with their owner rather
+than inside a namespace.
+
+Only edges that cross a namespace are drawn — within one, nearly everything
+talks to everything, and drawing that would say nothing.
 
 ## What kcm-controller-manager does
 

@@ -1,66 +1,130 @@
-// Workloads in the management cluster and how they interact. Render with:
+// What runs in a k0rdent management cluster, by namespace. Render with:
 //   dot -Tsvg docs/architecture.dot -o docs/architecture.svg
 //
-// Grouped by what each does, not by who installed it: the delivery path runs
-// left to right, and the workloads that only support it sit underneath.
+// Each namespace box has two columns: the workloads that run there, and the
+// CRDs those workloads own. CRDs are cluster-scoped -- they are placed with
+// their owner, not inside a namespace.
 //
-// Solid edges are "acts on": A -> B means A writes objects B acts on.
-// Dashed edges are what comes back -- the status KCM waits on.
+// Only the edges that cross a namespace are drawn. Within a namespace almost
+// everything talks to everything, and drawing that would say nothing.
 
-digraph kcm {
-  rankdir=LR;
-  nodesep=0.4;
-  ranksep=0.9;
+digraph cluster_layout {
+  rankdir=TB;
+  compound=true;
   fontname="Helvetica";
-  node [fontname="Helvetica", fontsize=10, shape=box, style="rounded,filled", color="#00000000"];
+  graph [fontname="Helvetica"];
+  node [fontname="Helvetica", fontsize=9, shape=box, style="filled", color="#00000000", margin="0.12,0.06"];
   edge [fontname="Helvetica", fontsize=9, color="#555555"];
 
-  KCM [fillcolor="#a8cfa8", penwidth=2, color="#6da86d",
-       label="kcm-controller-manager\ncontrollers + admission webhook"];
+  subgraph cluster_mgmt {
+    label="k0rdent Management Cluster";
+    fontsize=15;
+    labeljust="l";
+    style="rounded,filled";
+    fillcolor="#fbfbfb";
+    color="#999999";
+    penwidth=2;
 
-  subgraph cluster_delivery {
-    label="Delivery: turns what KCM renders into running things";
-    labeljust="l"; fontsize=11;
-    style="rounded,filled"; fillcolor="#faf3e0"; color="#e0d6b8";
+    // ================= kcm-system =====================================
+    subgraph cluster_kubesystem {
+      label="namespace: kube-system";
+      fontsize=12; labeljust="l";
+      style="rounded,filled"; fillcolor="#f2f2f2"; color="#cccccc";
 
-    Flux    [fillcolor="#f3e2b8", label="source-controller +\nhelm-controller"];
-    CAPIOp  [fillcolor="#f3e2b8", label="cluster-api-operator"];
-    CAPI    [fillcolor="#f3e2b8", label="capi-controller-manager\n+ infrastructure providers"];
-    Sveltos [fillcolor="#f3e2b8", label="addon-controller\n(Projectsveltos)"];
+      subgraph cluster_ks_wl {
+        label="Deployments and DaemonSets";
+        fontsize=10; labeljust="l";
+        style="rounded,filled"; fillcolor="#e8e8e8"; color="#cccccc";
+
+        ks_dns   [fillcolor="#e0e0e0", label="coredns"];
+        ks_ms    [fillcolor="#e0e0e0", label="metrics-server"];
+        ks_net   [fillcolor="#e0e0e0", label="kube-proxy, kube-router,\nkonnectivity-agent"];
+      }
+    }
+
+    subgraph cluster_sveltos {
+      label="namespace: projectsveltos";
+      fontsize=12; labeljust="l";
+      style="rounded,filled"; fillcolor="#faf3e0"; color="#e0d6b8";
+
+      subgraph cluster_sv_crd {
+        label="CRDs owned here (cluster-scoped)";
+        fontsize=10; labeljust="l";
+        style="rounded,filled"; fillcolor="#e8f0f8"; color="#b8cde0";
+
+        crd_sv_cfg [fillcolor="#dce8f7", label="config.projectsveltos.io\nClusterProfile, Profile,\nClusterSummary, ClusterConfiguration"];
+        crd_sv_lib [fillcolor="#dce8f7", label="lib.projectsveltos.io\nSveltosCluster, RoleRequest,\nClassifier, EventSource, …"];
+      }
+
+      subgraph cluster_sv_wl {
+        label="Deployments";
+        fontsize=10; labeljust="l";
+        style="rounded,filled"; fillcolor="#f5ead1"; color="#e0d6b8";
+
+        sv_addon [fillcolor="#eccf8a", penwidth=1.5, color="#c9a552", label="addon-controller"];
+        sv_access[fillcolor="#f3e2b8", label="access-manager"];
+        sv_shard [fillcolor="#f3e2b8", label="shard-controller"];
+        sv_agent [fillcolor="#f3e2b8", label="sveltos-agent-manager"];
+        sv_rest  [fillcolor="#f3e2b8", label="classifier-manager, event-manager,\nhc-manager, sc-manager,\ntechsupport-controller, mcp-server"];
+      }
+    }
+
+    subgraph cluster_kcmsystem {
+      label="namespace: kcm-system";
+      fontsize=12; labeljust="l";
+      style="rounded,filled"; fillcolor="#eef4ea"; color="#a8c898";
+
+      subgraph cluster_kcm_crd {
+        label="CRDs owned here (cluster-scoped)";
+        fontsize=10; labeljust="l";
+        style="rounded,filled"; fillcolor="#e8f0f8"; color="#b8cde0";
+
+        crd_inst [fillcolor="#d2e3f2", label="k0rdent.mirantis.com — install\nRelease, Management, Region"];
+        crd_tpl  [fillcolor="#d2e3f2", label="k0rdent.mirantis.com — templates\nCluster/Service/ProviderTemplate\n+ TemplateChains"];
+        crd_cd   [fillcolor="#d2e3f2", label="k0rdent.mirantis.com — clusters\nClusterDeployment, Credential,\nClusterIPAM(Claim), RBACPolicy"];
+        crd_ksm  [fillcolor="#d2e3f2", label="k0rdent.mirantis.com — services\nMultiClusterService, ServiceSet,\nStateManagementProvider"];
+        crd_flux [fillcolor="#dce8f7", label="*.toolkit.fluxcd.io\nHelmRelease, HelmRepository,\nHelmChart"];
+        crd_capi [fillcolor="#dce8f7", label="cluster.x-k8s.io\nCluster, Machine, MachineSet, …"];
+        crd_vel  [fillcolor="#dce8f7", label="velero.io\nBackup, Schedule, Restore"];
+      }
+
+      subgraph cluster_kcm_wl {
+        label="Deployments";
+        fontsize=10; labeljust="l";
+        style="rounded,filled"; fillcolor="#dfeed6"; color="#bcd6ac";
+
+        kcm_mgr   [fillcolor="#8fc47a", penwidth=1.5, color="#5f9448", label="kcm-controller-manager"];
+        kcm_src   [fillcolor="#cfe6c0", label="source-controller"];
+        kcm_helm  [fillcolor="#cfe6c0", label="helm-controller"];
+        kcm_capi  [fillcolor="#cfe6c0", label="capi-controller-manager"];
+        kcm_capiop[fillcolor="#cfe6c0", label="kcm-cluster-api-operator"];
+        kcm_cert  [fillcolor="#cfe6c0", label="kcm-cert-manager\n+ cainjector + webhook"];
+        kcm_rbac  [fillcolor="#cfe6c0", label="kcm-rbac-manager"];
+        kcm_rel   [fillcolor="#cfe6c0", label="kcm-reloader"];
+        kcm_vel   [fillcolor="#cfe6c0", label="velero"];
+      }
+    }
   }
 
-  subgraph cluster_support {
-    label="Supporting the management cluster itself";
-    labeljust="l"; fontsize=11;
-    style="rounded,filled"; fillcolor="#f2f2f2"; color="#cccccc";
+  Child [fillcolor="#e8dcf7", style="filled", shape=box3d, fontsize=11, label="Child clusters"];
 
-    CertMgr  [fillcolor="#e4e4e4", label="cert-manager"];
-    Reloader [fillcolor="#e4e4e4", label="reloader"];
-    RBACMgr  [fillcolor="#e4e4e4", label="rbac-manager"];
-    Velero   [fillcolor="#e4e4e4", label="velero"];
-    Telemetry[fillcolor="#e4e4e4", label="telemetry"];
-  }
 
-  Child [fillcolor="#e8dcf7", shape=box3d, label="Child clusters"];
+  // Invisible chains: without them the members of a column land on one rank and
+  // the "columns" come out as rows.
+  edge [style=invis, weight=10];
+  kcm_mgr -> kcm_src -> kcm_helm -> kcm_capi -> kcm_capiop -> kcm_cert -> kcm_rbac -> kcm_rel -> kcm_vel;
+  crd_inst -> crd_tpl -> crd_cd -> crd_ksm -> crd_flux -> crd_capi -> crd_vel;
+  sv_addon -> sv_access -> sv_shard -> sv_agent -> sv_rest;
+  crd_sv_cfg -> crd_sv_lib;
+  ks_dns -> ks_ms -> ks_net;
+  edge [style=solid, weight=1];
 
-  // the delivery path
-  KCM  -> Flux    [label="HelmRelease"];
-  Flux -> CAPIOp  [label="installs"];
-  Flux -> Sveltos [label="installs"];
-  CAPIOp -> CAPI  [label="installs and\nupgrades providers"];
-  KCM  -> Sveltos [label="Profile"];
-  CAPI -> Child   [label="provisions"];
-  Sveltos -> Child[label="installs services"];
 
-  // what comes back
-  CAPI    -> KCM [style=dashed, constraint=false, color="#b0b0b0", fontcolor="#909090", penwidth=0.8, label="Cluster status"];
-  Sveltos -> KCM [style=dashed, constraint=false, color="#b0b0b0", fontcolor="#909090", penwidth=0.8, label="ClusterSummary"];
-  Child   -> KCM [style=dashed, constraint=false, color="#b0b0b0", fontcolor="#909090", penwidth=0.8, label="health rules\nevaluated there"];
-
-  // supporting workloads
-  KCM -> Velero   [label="Backup"];
-  KCM -> RBACMgr  [label="RBAC objects"];
-  CertMgr  -> KCM [style=dashed, constraint=false, color="#b0b0b0", fontcolor="#909090", penwidth=0.8, label="webhook cert"];
-  Reloader -> KCM [style=dashed, constraint=false, color="#b0b0b0", fontcolor="#909090", penwidth=0.8, label="restarts"];
-  KCM -> Telemetry[style=dotted, dir=back, color="#b0b0b0", fontcolor="#909090", label="reads usage"];
+  // ---- only what crosses a namespace ------------------------------------
+  kcm_mgr -> crd_flux  [constraint=false, label="renders HelmRelease"];
+  kcm_helm -> sv_addon [constraint=false, lhead=cluster_sveltos, label="installs Sveltos"];
+  kcm_mgr -> crd_sv_cfg [constraint=false, label="writes Profile"];
+  crd_sv_cfg -> sv_addon [constraint=false, label="acted on by"];
+  sv_addon -> Child [constraint=false, label="installs services"];
+  kcm_capi -> Child [constraint=false, label="provisions"];
 }
