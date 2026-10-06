@@ -1107,7 +1107,8 @@ func (rd resolvedDependency) unresolvedVersions() (blocking string, err error) {
 	return "", fmt.Errorf("failed to resolve desired versions of MultiClusterService %s which this depends on: %w", rd.key, rd.resolveErr)
 }
 
-// dependencyProgress is one blocked-message entry: how far a dependency got, and what is behind.
+// dependencyProgress is one blocked-message entry: how far a dependency got, and which of its
+// services are behind.
 func dependencyProgress(name string, deployed, total int, lagging []string) string {
 	entry := fmt.Sprintf("%s (%d/%d services deployed)", name, deployed, total)
 	if len(lagging) > 0 {
