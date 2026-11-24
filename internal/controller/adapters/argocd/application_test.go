@@ -53,7 +53,7 @@ func Test_providerConfig_syncPolicy(t *testing.T) {
 	require.NotNil(t, policy.Automated)
 	require.True(t, policy.Automated.Prune)
 	require.True(t, policy.Automated.SelfHeal)
-	require.Equal(t, []string{"CreateNamespace=true"}, policy.SyncOptions)
+	require.Equal(t, []string{"CreateNamespace=true", "ServerSideApply=true"}, policy.SyncOptions)
 
 	off := false
 	require.Nil(t, providerConfig{Automated: &off}.syncPolicyFrom().Automated)

@@ -162,11 +162,24 @@ func (c providerConfig) syncPolicyFrom() *syncPolicy {
 		}
 	}
 	if len(policy.SyncOptions) == 0 {
-		// The namespace a service asks for is rarely one that already exists
-		// on a freshly provisioned cluster.
-		policy.SyncOptions = []string{"CreateNamespace=true"}
+		policy.SyncOptions = defaultSyncOptions()
 	}
 	return policy
+}
+
+// defaultSyncOptions are what a chart needs from Argo CD to install the way
+// Helm would have.
+func defaultSyncOptions() []string {
+	return []string{
+		// The namespace a service asks for is rarely one that already exists
+		// on a freshly provisioned cluster.
+		"CreateNamespace=true",
+		// Client-side apply records the whole object in an annotation, and
+		// annotations are capped at 256KB - which a large CRD exceeds, so the
+		// chart that carries it cannot be installed at all. Helm never wrote
+		// that annotation, so no service hit this under Sveltos.
+		"ServerSideApply=true",
+	}
 }
 
 func (c providerConfig) project() string {
