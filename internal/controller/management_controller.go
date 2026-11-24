@@ -99,7 +99,7 @@ type ManagementReconciler struct {
 	EnableInPlaceVersionWithDeleteFirst bool // passed to the components
 	EnableFluxAdapter                   bool // creates the Flux-backed StateManagementProvider
 
-	sveltosDependentControllersStarted bool
+	dependentControllersStarted bool
 }
 
 const cldRegSecretName string = "cld-registry-credentials"
@@ -331,8 +331,15 @@ func (r *ManagementReconciler) validateManagement(ctx context.Context, managemen
 // startDependentControllers starts controllers that cannot be started
 // at process startup because of some dependency like CRDs being present.
 func (r *ManagementReconciler) startDependentControllers(ctx context.Context, management *kcmv1.Management) (requeue bool, err error) {
-	if r.sveltosDependentControllersStarted {
+	if r.dependentControllersStarted {
 		// Only need to start controllers once.
+		return false, nil
+	}
+
+	if r.Manager == nil {
+		// Reconcile was called on a reconciler SetupWithManager never wired up,
+		// so there is no manager to attach the controllers below to. Only
+		// reachable from a test that drives Reconcile directly.
 		return false, nil
 	}
 
@@ -340,15 +347,24 @@ func (r *ManagementReconciler) startDependentControllers(ctx context.Context, ma
 	// and MultiClusterService controllers only produce ServiceSets, and which
 	// adapter turns those into a deployment is the ServiceSet's own business.
 	stateManagementProviders := []string{kcmv1.ProviderSveltosName, kcmv1.ProviderArgoCDName}
+
+	l := ctrl.LoggerFrom(ctx).WithValues("provider_names", stateManagementProviders)
+
+	// A Management that enables none of them has nothing to wait for. That is
+	// not a broken install: the Flux adapter ships inside KCM itself, so there
+	// is no component of its own to become ready. Keyed on the spec, not the
+	// status, which is empty on the first reconcile of a Management that does
+	// enable one.
+	enabled := slices.ContainsFunc(management.Spec.Providers, func(p kcmv1.Provider) bool {
+		return slices.Contains(stateManagementProviders, p.Name)
+	})
 	ready := slices.ContainsFunc(stateManagementProviders, func(name string) bool {
 		return management.Status.Components[name].Success
 	})
 
-	l := ctrl.LoggerFrom(ctx).WithValues("provider_names", stateManagementProviders)
-
-	if !ready {
+	if enabled && !ready {
 		msg := "Waiting for a state management provider to be ready to setup controllers dependent on it"
-		r.eventf(management, "WaitingForSveltosReadiness", msg)
+		r.eventf(management, "WaitingForStateManagementProviderReadiness", msg)
 		l.Info(msg)
 		return true, nil
 	}
@@ -374,7 +390,7 @@ func (r *ManagementReconciler) startDependentControllers(ctx context.Context, ma
 	}).SetupWithManager(r.Manager); err != nil {
 		return false, fmt.Errorf("failed to setup controller for ClusterDeployment: %w", err)
 	}
-	r.eventf(management, "ClusterDeploymentControllerEnabled", "Sveltos is ready. Enabling ClusterDeployment controller")
+	r.eventf(management, "ClusterDeploymentControllerEnabled", "Dependencies are ready. Enabling ClusterDeployment controller")
 	l.Info("Setup for ClusterDeployment controller successful")
 
 	l.Info("Provider has been successfully installed, so setting up controller for MultiClusterService")
@@ -384,10 +400,10 @@ func (r *ManagementReconciler) startDependentControllers(ctx context.Context, ma
 	}).SetupWithManager(r.Manager); err != nil {
 		return false, fmt.Errorf("failed to setup controller for MultiClusterService: %w", err)
 	}
-	r.eventf(management, "MultiClusterServiceControllerEnabled", "Sveltos is ready. Enabling MultiClusterService controller")
+	r.eventf(management, "MultiClusterServiceControllerEnabled", "Dependencies are ready. Enabling MultiClusterService controller")
 	l.Info("Setup for MultiClusterService controller successful")
 
-	r.sveltosDependentControllersStarted = true
+	r.dependentControllersStarted = true
 	return false, nil
 }
 
