@@ -1,0 +1,49 @@
+name: KSM E2E (Argo CD)
+
+# The same scenarios as ksm-e2e.yml, deployed by the Argo CD adapter instead of
+# Sveltos. It is a second workflow rather than a second input on the first so
+# the Sveltos leg keeps reporting on its own, and so this one can be removed in
+# one piece if the provider does not survive the experiment.
+#
+# TEMPORARY, both lines: the scenarios need the KSM_PROVIDER plumbing from
+# josef-hak/ksm-tests@argo-cd-tests, which is not in k0rdent/ksm-tests yet.
+# Point both back at a k0rdent/ksm-tests tag once it is.
+
+on:
+  push:
+    branches:
+      - argo
+
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'KCM ref to build (branch, tag or sha; empty = this branch)'
+        required: false
+        default: ''
+      scenarios:
+        description: 'Scenario ids, comma separated (empty = all)'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ksm-e2e-argocd-${{ github.head_ref || github.ref_name }}-${{ inputs.ref || '' }}-${{ inputs.scenarios || '' }}
+  cancel-in-progress: true
+
+jobs:
+  ksm:
+    name: KSM (Argo CD)
+    uses: josef-hak/ksm-tests/.github/workflows/e2e.yml@argo-cd-tests
+    with:
+      ksm_ref: argo-cd-tests
+      ksm_repo: josef-hak/ksm-tests
+      # What this workflow exists for: the ServiceSets go to the Argo CD
+      # adapter, and the deployment installs the argocd provider in place of
+      # projectsveltos.
+      KSM_PROVIDER: ksm-argocd
+      KCM: ${{ inputs.ref || github.event.pull_request.head.sha || github.sha }}
+      KCM_MODE: source
+      SRC_URL: ${{ github.event.pull_request.head.repo.clone_url || format('{0}/{1}.git', github.server_url, github.repository) }}
+      scenarios: ${{ inputs.scenarios }}
