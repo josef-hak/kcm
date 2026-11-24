@@ -29,10 +29,31 @@ import (
 const (
 	DefaultSystemNamespace         = "kcm-system"
 	DefaultStateManagementProvider = "ksm-projectsveltos"
+	// ArgoCDStateManagementProvider is the built-in provider that deploys
+	// services through Argo CD.
+	ArgoCDStateManagementProvider = "ksm-argocd"
 
 	DefaultStateManagementProviderSelectorKey   = "ksm.k0rdent.mirantis.com/adapter"
 	DefaultStateManagementProviderSelectorValue = "kcm-controller-manager"
+	// ArgoCDStateManagementProviderSelectorValue labels the ServiceSets the
+	// Argo CD adapter is responsible for. A value of its own is what keeps the
+	// two built-in adapters, hosted by the same workload, apart.
+	ArgoCDStateManagementProviderSelectorValue = "kcm-controller-manager-argocd"
+
+	// DefaultStateManagementProviderEnvName overrides, for the whole
+	// installation, the provider a ClusterDeployment or MultiClusterService
+	// gets when it names none.
+	DefaultStateManagementProviderEnvName = "DEFAULT_STATE_MANAGEMENT_PROVIDER"
 )
+
+// DefaultStateManagementProviderName is the [StateManagementProvider] used for
+// services whose spec does not name one.
+func DefaultStateManagementProviderName() string {
+	if name := os.Getenv(DefaultStateManagementProviderEnvName); name != "" {
+		return name
+	}
+	return DefaultStateManagementProvider
+}
 
 func EnsureDeleteAllOf(ctx context.Context, cl client.Client, gvk schema.GroupVersionKind, opts *client.ListOptions) (requeue bool, err error) {
 	l := ctrl.LoggerFrom(ctx).V(1).WithName("ensure-delete")

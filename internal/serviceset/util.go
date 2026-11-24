@@ -1179,7 +1179,7 @@ func StateManagementProviderConfigFromServiceSpec(serviceSpec kcmv1.ServiceSpec)
 	// if neither provider name nor config is set, we'll use the
 	// default provider and config defined in deprecated fields
 	case serviceSpec.Provider.Name == "" && serviceSpec.Provider.Config == nil:
-		providerConfig.Name = kubeutil.DefaultStateManagementProvider
+		providerConfig.Name = kubeutil.DefaultStateManagementProviderName()
 		raw, err := json.Marshal(cfg)
 		if err != nil {
 			return kcmv1.StateManagementProviderConfig{}, fmt.Errorf("failed to marshal config: %w", err)
@@ -1189,7 +1189,7 @@ func StateManagementProviderConfigFromServiceSpec(serviceSpec kcmv1.ServiceSpec)
 	// if provider name is not set, but config is defined, we'll
 	// use the default provider name and defined configuration
 	case serviceSpec.Provider.Name == "" && serviceSpec.Provider.Config != nil:
-		providerConfig.Name = kubeutil.DefaultStateManagementProvider
+		providerConfig.Name = kubeutil.DefaultStateManagementProviderName()
 		providerConfig.Config = serviceSpec.Provider.Config.DeepCopy()
 
 	// if provider name is set, but config is not defined, we'll

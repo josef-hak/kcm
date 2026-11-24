@@ -61,6 +61,10 @@ spec:
         {{- if .Values.controller.enableSveltosExpiredCtrl }}
         - --enable-sveltos-expire-ctrl={{ .Values.controller.enableSveltosExpiredCtrl }}
         {{- end }}
+        {{- if .Values.controller.enableArgoCDCtrl }}
+        - --enable-argocd-ctrl={{ .Values.controller.enableArgoCDCtrl }}
+        - --argocd-namespace={{ .Values.controller.argoCDNamespace }}
+        {{- end }}
         {{- if .Values.controller.enableInPlaceUpdates }}
         - --enable-in-place-updates={{ .Values.controller.enableInPlaceUpdates }}
         {{- end }}
@@ -84,6 +88,10 @@ spec:
           value: {{ .Release.Name | quote }}
         - name: KUBERNETES_CLUSTER_DOMAIN
           value: {{ quote .Values.kubernetesClusterDomain }}
+        {{- if .Values.controller.defaultStateManagementProvider }}
+        - name: DEFAULT_STATE_MANAGEMENT_PROVIDER
+          value: {{ .Values.controller.defaultStateManagementProvider | quote }}
+        {{- end }}
         {{- if and .Values.proxy .Values.proxy.secretName }}
         - name: PROXY_SECRET
           value: {{ .Values.proxy.secretName | quote }}

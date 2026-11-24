@@ -1,0 +1,13 @@
+argo-cd:
+  # Pins the names of the workloads the StateManagementProvider refers to:
+  # without it they carry the Helm release name, which KCM derives from the
+  # cluster the component is installed on.
+  fullnameOverride: argocd
+
+  # KCM drives Argo CD through Application objects only. The components that
+  # serve the UI's extras cost pods on every management cluster and nothing
+  # reads them.
+  dex:
+    enabled: false
+  notifications:
+    enabled: false

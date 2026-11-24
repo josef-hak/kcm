@@ -40,6 +40,10 @@
           "description": "Affinity rules for pod scheduling",
           "type": "object"
         },
+        "argoCDNamespace": {
+          "description": "Namespace Argo CD runs in, where the built-in Argo CD adapter writes Application objects",
+          "type": "string"
+        },
         "capiClusterPollInterval": {
           "description": "Polling interval for the periodic CAPI Cluster status check used by the ClusterDeployment controller. Set to \"0\" to disable the poller",
           "type": "string"
@@ -72,6 +76,14 @@
         "defaultHelmTimeout": {
           "description": "Specifies the timeout duration for Helm install or upgrade operations. If unset, Flux’s default value will be used",
           "type": "string"
+        },
+        "defaultStateManagementProvider": {
+          "description": "StateManagementProvider used by ClusterDeployments and MultiClusterServices that name none. Empty means ksm-projectsveltos",
+          "type": "string"
+        },
+        "enableArgoCDCtrl": {
+          "description": "Enables built-in ServiceSet controller reconciling Argo CD Application objects. Requires the argocd provider to be enabled in the Management",
+          "type": "boolean"
         },
         "enableInPlaceUpdates": {
           "description": "Enables Cluster API in-place updates (experimental) in the cluster-api and k0smotron providers. Might be overridden per provider with the inPlaceUpdates.enabled value. Disabling removes the k0smotron extension webhook, so do it only when no clusters use the InPlace update strategy or are being updated",

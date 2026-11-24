@@ -341,7 +341,10 @@ func getWrappedComponents(ctx context.Context, cluster clusterInterface, release
 
 	components = append(components, capiComp)
 
-	const sveltosTargetNamespace = "projectsveltos"
+	const (
+		sveltosTargetNamespace = "projectsveltos"
+		argoCDTargetNamespace  = "argocd"
+	)
 
 	for _, p := range cluster.Components().Providers {
 		c := component{
@@ -362,13 +365,25 @@ func getWrappedComponents(ctx context.Context, cluster clusterInterface, release
 			c.Template = release.ProviderTemplate(p.Name)
 		}
 
-		if p.Name == kcmv1.ProviderSveltosName {
+		// The state management providers are not CAPI providers: they get a
+		// namespace of their own and no provider contract check.
+		switch p.Name {
+		case kcmv1.ProviderSveltosName:
 			c.isCAPIProvider = false
 			c.targetNamespace = sveltosTargetNamespace
 			c.installSettings = &helmcontrollerv2.Install{
 				CreateNamespace: true,
 				Remediation:     remediationSettings,
 			}
+		case kcmv1.ProviderArgoCDName:
+			c.isCAPIProvider = false
+			c.targetNamespace = argoCDTargetNamespace
+			c.installSettings = &helmcontrollerv2.Install{
+				CreateNamespace: true,
+				Remediation:     remediationSettings,
+				CRDs:            helmcontrollerv2.CreateReplace,
+			}
+			c.upgradeSettings = &helmcontrollerv2.Upgrade{CRDs: helmcontrollerv2.CreateReplace}
 		}
 
 		conf, err := getComponentValues(ctx, p.Name, c.Config, opts)
