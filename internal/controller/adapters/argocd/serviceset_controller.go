@@ -461,6 +461,9 @@ func (r *ServiceSetReconciler) reconcileDelete(ctx context.Context, serviceSet *
 			if !app.GetDeletionTimestamp().IsZero() {
 				continue
 			}
+			if err := r.terminateOperation(ctx, app); err != nil {
+				return ctrl.Result{}, err
+			}
 			l.Info("Deleting Application", "application", client.ObjectKeyFromObject(app))
 			if err := r.Delete(ctx, app); client.IgnoreNotFound(err) != nil {
 				return ctrl.Result{}, fmt.Errorf("failed to delete Application %s/%s: %w", app.GetNamespace(), app.GetName(), err)
@@ -477,6 +480,31 @@ func (r *ServiceSetReconciler) reconcileDelete(ctx context.Context, serviceSet *
 		}
 	}
 	return ctrl.Result{}, nil
+}
+
+// terminateOperation asks Argo CD to stop a sync that is still in flight, the
+// way `argocd app terminate-op` does.
+//
+// Deleting an Application with a running operation is not enough: Argo CD
+// finishes what it started first, and a sync that keeps failing is retried
+// with a growing back-off, so a service that can never apply holds up the
+// removal of the whole ServiceSet for minutes.
+func (r *ServiceSetReconciler) terminateOperation(ctx context.Context, app *unstructured.Unstructured) error {
+	phase, found, err := unstructured.NestedString(app.Object, "status", "operationState", "phase")
+	if err != nil || !found || phase != operationRunning {
+		return nil
+	}
+	if err := unstructured.SetNestedField(app.Object, operationTerminating, "status", "operationState", "phase"); err != nil {
+		return fmt.Errorf("failed to mark the operation of Application %s terminating: %w", app.GetName(), err)
+	}
+	ctrl.LoggerFrom(ctx).Info("Terminating in-flight Argo CD sync", "application", client.ObjectKeyFromObject(app))
+	if err := r.Update(ctx, app); client.IgnoreNotFound(err) != nil {
+		// Not fatal: the delete below still happens, it just waits for the
+		// sync Argo CD is still retrying.
+		ctrl.LoggerFrom(ctx).Error(err, "failed to terminate the sync, deleting anyway",
+			"application", client.ObjectKeyFromObject(app))
+	}
+	return nil
 }
 
 // regionalClient returns the client for the cluster that holds the kubeconfig

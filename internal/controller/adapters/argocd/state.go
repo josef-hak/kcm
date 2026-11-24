@@ -34,8 +34,10 @@ const (
 
 	syncSynced = "Synced"
 
-	operationFailed = "Failed"
-	operationError  = "Error"
+	operationFailed      = "Failed"
+	operationError       = "Error"
+	operationRunning     = "Running"
+	operationTerminating = "Terminating"
 )
 
 // applicationStatus is the part of Application.status the adapter reads.
