@@ -19,6 +19,8 @@ import (
 	"strings"
 	"time"
 
+	apimeta "k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 
@@ -82,11 +84,18 @@ func statusFromApplication(app *unstructured.Unstructured) (applicationStatus, e
 // serviceState translates one Application into the state of the service it
 // backs.
 //
-// Deployed requires both axes to agree: Argo CD reports the live resources as
-// Healthy and the cluster as Synced with the revision it was told to deploy.
-// Sync alone would call a service done the moment the manifests were applied,
-// before anything they created came up; health alone would keep reporting the
-// previous revision as fine while a new one is still rolling out.
+// Deployed means synced: the manifests of the revision Argo CD was told to
+// deploy are on the cluster. That is the same bar the Sveltos adapter reports
+// Deployed at - a Helm release is deployed once it applied, not once what it
+// created came up - and a service has to mean the same thing whichever
+// provider carries it.
+//
+// Argo CD's health is the stricter signal, and it is kept: Degraded is a
+// failure, and the health of a synced service is recorded as a condition on
+// it. It cannot gate Deployed, because health that never settles is ordinary
+// - a Service of type LoadBalancer on a cluster with no load balancer stays
+// Progressing forever - and KCM already has a place for a health verdict that
+// does gate: the verifier, driven by rules the user opts into.
 func serviceState(app *unstructured.Unstructured, svc kcmv1.ServiceWithValues, previous *kcmv1.ServiceState, now time.Time) kcmv1.ServiceState {
 	state := kcmv1.ServiceState{
 		Name:      svc.Name,
@@ -110,14 +119,6 @@ func serviceState(app *unstructured.Unstructured, svc kcmv1.ServiceWithValues, p
 	targetRevision, _, _ := unstructured.NestedString(app.Object, "spec", "source", "targetRevision")
 
 	switch {
-	case status.Health.Status == healthHealthy && status.Sync.Status == syncSynced:
-		state.State = kcmv1.ServiceStateDeployed
-		// The revision Argo CD confirmed, not the one we asked for: during an
-		// upgrade the two differ until the new chart is actually on cluster,
-		// and KCM gates dependent services on the confirmed one.
-		state.Version = firstNonEmpty(status.Sync.Revision, targetRevision, svc.Version)
-		state.FailureMessage = ""
-
 	case status.OperationState != nil && (status.OperationState.Phase == operationFailed || status.OperationState.Phase == operationError):
 		state.State = kcmv1.ServiceStateFailed
 		state.FailureMessage = firstNonEmpty(status.OperationState.Message, "sync "+strings.ToLower(status.OperationState.Phase))
@@ -125,6 +126,14 @@ func serviceState(app *unstructured.Unstructured, svc kcmv1.ServiceWithValues, p
 	case status.Health.Status == healthDegraded:
 		state.State = kcmv1.ServiceStateFailed
 		state.FailureMessage = firstNonEmpty(status.Health.Message, conditionMessage(status.Conditions), "application is degraded")
+
+	case status.Sync.Status == syncSynced:
+		state.State = kcmv1.ServiceStateDeployed
+		// The revision Argo CD synced, not the one we asked for: during an
+		// upgrade the two differ until the new chart is actually on cluster,
+		// and KCM gates dependent services on the confirmed one.
+		state.Version = firstNonEmpty(status.Sync.Revision, targetRevision, svc.Version)
+		state.FailureMessage = ""
 
 	default:
 		state.State = kcmv1.ServiceStateProvisioning
@@ -141,7 +150,30 @@ func serviceState(app *unstructured.Unstructured, svc kcmv1.ServiceWithValues, p
 		}
 	}
 
+	applyHealthCondition(&state, status.Health)
+
 	return stamp(state, previous, now)
+}
+
+// serviceHealthCondition carries Argo CD's health verdict for a service that
+// was deployed. It is the signal Deployed deliberately does not wait for, so
+// it has to be visible somewhere.
+const serviceHealthCondition = "ArgoCDHealth"
+
+func applyHealthCondition(state *kcmv1.ServiceState, health healthStatus) {
+	if health.Status == "" {
+		return
+	}
+	status := metav1.ConditionFalse
+	if health.Status == healthHealthy {
+		status = metav1.ConditionTrue
+	}
+	apimeta.SetStatusCondition(&state.Conditions, metav1.Condition{
+		Type:    serviceHealthCondition,
+		Status:  status,
+		Reason:  health.Status,
+		Message: firstNonEmpty(health.Message, "Argo CD reports the service as "+health.Status),
+	})
 }
 
 // stamp keeps LastStateTransitionTime pinned to the moment the state actually

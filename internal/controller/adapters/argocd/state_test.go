@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"sigs.k8s.io/yaml"
@@ -43,10 +44,11 @@ func Test_serviceState(t *testing.T) {
 		wantState   string
 		wantVersion string
 		wantFailure string
+		wantHealth  metav1.ConditionStatus
 	}{
 		{
-			// Both axes agree, and the version reported is the one Argo CD
-			// confirmed rather than the one it was asked for.
+			// The version reported is the one Argo CD synced rather than the
+			// one it was asked for.
 			name: "healthy and synced",
 			manifest: `
 spec: {source: {targetRevision: "41.2.0"}}
@@ -55,6 +57,7 @@ status:
   sync: {status: Synced, revision: "41.2.0"}`,
 			wantState:   kcmv1.ServiceStateDeployed,
 			wantVersion: "41.2.0",
+			wantHealth:  metav1.ConditionTrue,
 		},
 		{
 			// Mid-upgrade: the resources that are up are still the old chart,
@@ -68,13 +71,18 @@ status:
 			wantState: kcmv1.ServiceStateProvisioning,
 		},
 		{
+			// Synced is the bar, as it is for a Helm release under Sveltos.
+			// Health that has not settled - and on a cluster with no load
+			// balancer never will - is reported, not waited for.
 			name: "synced but still rolling out",
 			manifest: `
 spec: {source: {targetRevision: "41.2.0"}}
 status:
-  health: {status: Progressing}
+  health: {status: Progressing, message: "Caused by Service traefik"}
   sync: {status: Synced, revision: "41.2.0"}`,
-			wantState: kcmv1.ServiceStateProvisioning,
+			wantState:   kcmv1.ServiceStateDeployed,
+			wantVersion: "41.2.0",
+			wantHealth:  metav1.ConditionFalse,
 		},
 		{
 			name: "sync failed",
@@ -125,6 +133,11 @@ status:
 			require.Equal(t, tc.wantFailure, state.FailureMessage)
 			require.Equal(t, kcmv1.ServiceTypeHelm, state.Type)
 			require.Equal(t, metav1.NewTime(now), *state.LastStateTransitionTime)
+			if tc.wantHealth != "" {
+				cond := apimeta.FindStatusCondition(state.Conditions, serviceHealthCondition)
+				require.NotNil(t, cond, "health has to be reported even when it does not gate the state")
+				require.Equal(t, tc.wantHealth, cond.Status)
+			}
 		})
 	}
 }
