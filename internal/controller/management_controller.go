@@ -511,8 +511,12 @@ func (r *ManagementReconciler) ensureArgoCDStateManagementProvider(ctx context.C
 		appProjectsResource         = "appprojects"
 
 		// The application controller is a StatefulSet, the repo server a
-		// Deployment; both expose readyReplicas, which is all the rule needs.
-		workloadReadyRule = `self.status.readyReplicas == self.status.replicas`
+		// Deployment; both expose readyReplicas, which is all the rule needs -
+		// but neither has the field before the first replica is ready, and a
+		// rule that reads it unguarded fails to evaluate rather than reporting
+		// not-ready.
+		workloadReadyRule = `has(self.status.readyReplicas) && has(self.status.replicas) &&
+self.status.readyReplicas == self.status.replicas`
 	)
 
 	stateManagementProvider := &kcmv1.StateManagementProvider{
