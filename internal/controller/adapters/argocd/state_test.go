@@ -85,6 +85,22 @@ status:
 			wantHealth:  metav1.ConditionFalse,
 		},
 		{
+			// Argo CD retries a sync that failed, and the phase stays Running
+			// while it does - for a chart that can never apply, for good.
+			name: "sync failing but still retrying",
+			manifest: `
+spec: {source: {targetRevision: "1.20.2"}}
+status:
+  health: {status: Healthy}
+  sync: {status: OutOfSync}
+  operationState:
+    phase: Running
+    retryCount: 1
+    message: 'Deployment.apps "cert-manager" is invalid: spec.replicas: Invalid value: -1'`,
+			wantState:   kcmv1.ServiceStateFailed,
+			wantFailure: `Deployment.apps "cert-manager" is invalid: spec.replicas: Invalid value: -1`,
+		},
+		{
 			name: "sync failed",
 			manifest: `
 spec: {source: {targetRevision: "41.2.0"}}

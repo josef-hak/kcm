@@ -57,8 +57,25 @@ type syncStatus struct {
 }
 
 type operationState struct {
-	Phase   string `json:"phase,omitempty"`
-	Message string `json:"message,omitempty"`
+	Phase      string `json:"phase,omitempty"`
+	Message    string `json:"message,omitempty"`
+	RetryCount int64  `json:"retryCount,omitempty"`
+}
+
+// failed reports whether the sync this operation describes has already failed
+// at least once.
+//
+// Not only the terminal phases: Argo CD retries a failed sync, and while it
+// does the phase stays Running, with no bound on how long that lasts for a
+// sync that can never succeed - a chart rendering a Deployment with a negative
+// replica count retries for good. Helm fails such an install outright, so
+// Sveltos reports the service failed and retries underneath; a retry already
+// spent is the same signal here.
+func (o *operationState) failed() bool {
+	if o == nil {
+		return false
+	}
+	return o.Phase == operationFailed || o.Phase == operationError || o.RetryCount > 0
 }
 
 type applicationCondition struct {
@@ -119,7 +136,7 @@ func serviceState(app *unstructured.Unstructured, svc kcmv1.ServiceWithValues, p
 	targetRevision, _, _ := unstructured.NestedString(app.Object, "spec", "source", "targetRevision")
 
 	switch {
-	case status.OperationState != nil && (status.OperationState.Phase == operationFailed || status.OperationState.Phase == operationError):
+	case status.OperationState.failed():
 		state.State = kcmv1.ServiceStateFailed
 		state.FailureMessage = firstNonEmpty(status.OperationState.Message, "sync "+strings.ToLower(status.OperationState.Phase))
 
