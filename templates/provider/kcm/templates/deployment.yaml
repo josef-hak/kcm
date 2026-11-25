@@ -55,7 +55,8 @@ spec:
         {{- end }}
         {{- end }}
         - --pprof-bind-address={{ .Values.controller.debug.pprofBindAddress }}
-        {{- if .Values.controller.enableSveltosCtrl }}
+        {{- /* kindIs, not truthiness: the flag defaults to true in the binary, so an `if` would drop the one value that has anything to say */}}
+        {{- if kindIs "bool" .Values.controller.enableSveltosCtrl }}
         - --enable-sveltos-ctrl={{ .Values.controller.enableSveltosCtrl }}
         {{- end }}
         {{- if .Values.controller.enableSveltosExpiredCtrl }}
@@ -63,6 +64,10 @@ spec:
         {{- end }}
         {{- if .Values.controller.enableFluxCtrl }}
         - --enable-flux-ctrl={{ .Values.controller.enableFluxCtrl }}
+        {{- end }}
+        {{- if .Values.controller.enableArgoCDCtrl }}
+        - --enable-argocd-ctrl={{ .Values.controller.enableArgoCDCtrl }}
+        - --argocd-namespace={{ .Values.controller.argoCDNamespace }}
         {{- end }}
         {{- if .Values.controller.enableInPlaceUpdates }}
         - --enable-in-place-updates={{ .Values.controller.enableInPlaceUpdates }}
@@ -88,7 +93,7 @@ spec:
         - name: KUBERNETES_CLUSTER_DOMAIN
           value: {{ quote .Values.kubernetesClusterDomain }}
         {{- if .Values.controller.defaultStateManagementProvider }}
-        - name: KCM_DEFAULT_STATE_MANAGEMENT_PROVIDER
+        - name: DEFAULT_STATE_MANAGEMENT_PROVIDER
           value: {{ .Values.controller.defaultStateManagementProvider | quote }}
         {{- end }}
         {{- if and .Values.proxy .Values.proxy.secretName }}

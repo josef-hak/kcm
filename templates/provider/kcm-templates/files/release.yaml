@@ -35,3 +35,5 @@ spec:
       template: cluster-api-provider-kubevirt-1-0-10
     - name: projectsveltos
       template: projectsveltos-1-17-0
+    - name: argocd
+      template: argocd-1-0-0

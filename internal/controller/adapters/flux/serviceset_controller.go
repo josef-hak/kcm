@@ -112,8 +112,23 @@ type ServiceSetReconciler struct {
 	AdapterName      string
 	AdapterNamespace string
 
+	// ProviderName is the StateManagementProvider this adapter answers for.
+	// Several adapters share one Deployment, so the adapter reference alone
+	// cannot tell them apart.
+	ProviderName string
+
 	MaxConcurrentReconciles int
 	requeueInterval         time.Duration
+}
+
+// serves reports whether this adapter is the one responsible for the
+// provider. Several adapters run in one Deployment, so the adapter reference
+// is the same for all of them and the provider name is the discriminator.
+func (r *ServiceSetReconciler) serves(smp *kcmv1.StateManagementProvider) bool {
+	if r.ProviderName != "" && smp.Name != r.ProviderName {
+		return false
+	}
+	return smp.Spec.Adapter.Name == r.AdapterName && smp.Spec.Adapter.Namespace == r.AdapterNamespace
 }
 
 func (r *ServiceSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (result ctrl.Result, err error) {
@@ -137,7 +152,8 @@ func (r *ServiceSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		// is one whose provider does not exist (yet).
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
-	if smp.AdapterKind() != kcmv1.AdapterKindFlux {
+	if !r.serves(smp) {
+		l.V(1).Info("ServiceSet is not served by this adapter, skipping", "provider", smp.Name)
 		return ctrl.Result{}, nil
 	}
 
@@ -298,7 +314,7 @@ func (r *ServiceSetReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&helmcontrollerv2.HelmRelease{}).
 		Watches(&kcmv1.StateManagementProvider{}, kubeutil.EnqueueRequestsFromMapFunc(func(ctx context.Context, o client.Object) ([]ctrl.Request, error) {
 			provider, ok := o.(*kcmv1.StateManagementProvider)
-			if !ok || provider.AdapterKind() != kcmv1.AdapterKindFlux {
+			if !ok || !r.serves(provider) {
 				return nil, nil
 			}
 

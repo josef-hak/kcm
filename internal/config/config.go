@@ -19,7 +19,6 @@ import (
 	"sync"
 
 	kcmv1 "github.com/K0rdent/kcm/api/v1beta1"
-	kubeutil "github.com/K0rdent/kcm/internal/util/kube"
 )
 
 const kcmHelmReleaseNameEnvVar = "HELM_RELEASE_NAME"
@@ -37,22 +36,4 @@ func resolveHelmReleaseName(lookupEnv func(string) (string, bool)) string {
 		return kcmv1.CoreKCMName
 	}
 	return releaseName
-}
-
-const defaultStateManagementProviderEnvVar = "KCM_DEFAULT_STATE_MANAGEMENT_PROVIDER"
-
-// DefaultStateManagementProvider returns the name of the StateManagementProvider
-// a ServiceSet is routed to when it names none. It can be overridden through the
-// KCM_DEFAULT_STATE_MANAGEMENT_PROVIDER environment variable, which is how a
-// cluster is switched over to another built-in adapter wholesale.
-var DefaultStateManagementProvider = sync.OnceValue(func() string {
-	return resolveDefaultStateManagementProvider(os.LookupEnv)
-})
-
-func resolveDefaultStateManagementProvider(lookupEnv func(string) (string, bool)) string {
-	name, ok := lookupEnv(defaultStateManagementProviderEnvVar)
-	if !ok || name == "" {
-		return kubeutil.DefaultStateManagementProvider
-	}
-	return name
 }

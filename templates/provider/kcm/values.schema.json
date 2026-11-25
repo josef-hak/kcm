@@ -40,6 +40,10 @@
           "description": "Affinity rules for pod scheduling",
           "type": "object"
         },
+        "argoCDNamespace": {
+          "description": "Namespace Argo CD runs in, where the built-in Argo CD adapter writes Application objects",
+          "type": "string"
+        },
         "capiClusterPollInterval": {
           "description": "Polling interval for the periodic CAPI Cluster status check used by the ClusterDeployment controller. Set to \"0\" to disable the poller",
           "type": "string"
@@ -74,8 +78,12 @@
           "type": "string"
         },
         "defaultStateManagementProvider": {
-          "description": "Name of the StateManagementProvider a ServiceSet is routed to when it names none. Empty means ksm-projectsveltos",
+          "description": "StateManagementProvider used by ClusterDeployments and MultiClusterServices that name none. Empty means ksm-projectsveltos",
           "type": "string"
+        },
+        "enableArgoCDCtrl": {
+          "description": "Enables built-in ServiceSet controller reconciling Argo CD Application objects. Requires the argocd provider to be enabled in the Management",
+          "type": "boolean"
         },
         "enableFluxCtrl": {
           "description": "Enables the Flux-backed ServiceSet controller and the ksm-flux StateManagementProvider",
