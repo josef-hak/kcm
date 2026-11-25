@@ -62,7 +62,7 @@ func TestLabelsMatchSelector(t *testing.T) {
 }
 
 func TestFindCondition(t *testing.T) {
-	serviceSet := &kcmv1.ServiceSet{ObjectMeta: metav1.ObjectMeta{Generation: 7}}
+	serviceSet := &kcmv1.ServiceSet{Generation: 7}
 	serviceSet.Status.Conditions = []metav1.Condition{{
 		Type: kcmv1.ServiceSetProfileCondition, Status: metav1.ConditionTrue, Reason: "Ready",
 	}}
@@ -80,7 +80,7 @@ func TestFindCondition(t *testing.T) {
 }
 
 func TestUpdateCondition(t *testing.T) {
-	serviceSet := &kcmv1.ServiceSet{ObjectMeta: metav1.ObjectMeta{Generation: 3}}
+	serviceSet := &kcmv1.ServiceSet{Generation: 3}
 
 	changed := updateCondition(serviceSet, findCondition(serviceSet, kcmv1.ServiceSetProfileCondition),
 		metav1.ConditionTrue, "Ready", "all good", testTime)
@@ -147,7 +147,7 @@ func TestServes(t *testing.T) {
 	}
 	provider := func(name, adapter, namespace string) *kcmv1.StateManagementProvider {
 		return &kcmv1.StateManagementProvider{
-			ObjectMeta: metav1.ObjectMeta{Name: name},
+			Name: name,
 			Spec: kcmv1.StateManagementProviderSpec{
 				Adapter: kcmv1.ResourceReference{Name: adapter, Namespace: namespace},
 			},
@@ -183,7 +183,7 @@ func TestFindServiceState(t *testing.T) {
 
 func TestApplicationLabelsAndSelector(t *testing.T) {
 	serviceSet := &kcmv1.ServiceSet{
-		ObjectMeta: metav1.ObjectMeta{Name: "set", Namespace: "kcm-system"},
+		Name: "set", Namespace: "kcm-system",
 	}
 
 	// A service with no namespace is deployed into "default", and the label
@@ -205,12 +205,12 @@ func TestApplicationLabelsAndSelector(t *testing.T) {
 
 func TestClusterSecretNameIsPerCluster(t *testing.T) {
 	a := clusterSecretName(&kcmv1.ServiceSet{
-		ObjectMeta: metav1.ObjectMeta{Namespace: "ns"},
-		Spec:       kcmv1.ServiceSetSpec{Cluster: "one"},
+		Namespace: "ns",
+		Spec:      kcmv1.ServiceSetSpec{Cluster: "one"},
 	})
 	b := clusterSecretName(&kcmv1.ServiceSet{
-		ObjectMeta: metav1.ObjectMeta{Namespace: "ns"},
-		Spec:       kcmv1.ServiceSetSpec{Cluster: "two"},
+		Namespace: "ns",
+		Spec:      kcmv1.ServiceSetSpec{Cluster: "two"},
 	})
 	require.NotEqual(t, a, b)
 	require.LessOrEqual(t, len(a), 253)

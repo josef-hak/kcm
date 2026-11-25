@@ -63,7 +63,7 @@ func TestLabelsMatchSelector(t *testing.T) {
 }
 
 func TestConditionHelpers(t *testing.T) {
-	serviceSet := &kcmv1.ServiceSet{ObjectMeta: metav1.ObjectMeta{Generation: 5}}
+	serviceSet := &kcmv1.ServiceSet{Generation: 5}
 
 	// A condition that is not there yet starts out Unknown, so the first
 	// update always counts as a change.
@@ -130,8 +130,8 @@ func TestClusterReference(t *testing.T) {
 	require.NotEqual(t, kcmv1.ClusterDeploymentKind, self.Kind)
 
 	child := clusterReference(&kcmv1.ServiceSet{
-		ObjectMeta: metav1.ObjectMeta{Namespace: "kcm-system"},
-		Spec:       kcmv1.ServiceSetSpec{Cluster: "child"},
+		Namespace: "kcm-system",
+		Spec:      kcmv1.ServiceSetSpec{Cluster: "child"},
 	})
 	require.Equal(t, kcmv1.ClusterDeploymentKind, child.Kind)
 	require.Equal(t, "child", child.Name)
@@ -146,7 +146,7 @@ func TestServes(t *testing.T) {
 	}
 	provider := func(name, adapter, namespace string) *kcmv1.StateManagementProvider {
 		return &kcmv1.StateManagementProvider{
-			ObjectMeta: metav1.ObjectMeta{Name: name},
+			Name: name,
 			Spec: kcmv1.StateManagementProviderSpec{
 				Adapter: kcmv1.ResourceReference{Name: adapter, Namespace: namespace},
 			},
@@ -298,9 +298,9 @@ func TestDriftDetection(t *testing.T) {
 
 func TestIsPaused(t *testing.T) {
 	require.False(t, isPaused(&kcmv1.ServiceSet{}))
-	require.True(t, isPaused(&kcmv1.ServiceSet{ObjectMeta: metav1.ObjectMeta{
+	require.True(t, isPaused(&kcmv1.ServiceSet{
 		Annotations: map[string]string{kcmv1.ServiceSetPausedAnnotation: ""},
-	}}), "the annotation's presence is what pauses, whatever its value")
+	}), "the annotation's presence is what pauses, whatever its value")
 }
 
 func TestSetChartSourceUnsupported(t *testing.T) {
@@ -308,8 +308,8 @@ func TestSetChartSourceUnsupported(t *testing.T) {
 	// is nothing to point the HelmRelease at, and saying so beats producing a
 	// HelmRelease that can never resolve.
 	err := setChartSource(new(helmcontrollerv2.HelmRelease), &kcmv1.ServiceTemplate{
-		ObjectMeta: metav1.ObjectMeta{Name: "t", Namespace: "kcm-system"},
-		Spec:       kcmv1.ServiceTemplateSpec{Helm: &kcmv1.HelmSpec{}},
+		Name: "t", Namespace: "kcm-system",
+		Spec: kcmv1.ServiceTemplateSpec{Helm: &kcmv1.HelmSpec{}},
 	})
 	require.Error(t, err)
 }
