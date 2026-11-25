@@ -21,7 +21,6 @@ import (
 	fluxmeta "github.com/fluxcd/pkg/apis/meta"
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
 	"github.com/stretchr/testify/require"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
@@ -33,7 +32,7 @@ const testNamespace = "kcm-system"
 
 func helmChart(name, chart, version, repoKind, repoName string, artifactRevision string) *sourcev1.HelmChart {
 	hc := &sourcev1.HelmChart{
-		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: testNamespace},
+		Name: name, Namespace: testNamespace,
 		Spec: sourcev1.HelmChartSpec{
 			Chart:     chart,
 			Version:   version,
@@ -48,7 +47,7 @@ func helmChart(name, chart, version, repoKind, repoName string, artifactRevision
 
 func serviceTemplate(chartRefName string) *kcmv1.ServiceTemplate {
 	return &kcmv1.ServiceTemplate{
-		ObjectMeta: metav1.ObjectMeta{Name: "traefik-41-2-0", Namespace: testNamespace},
+		Name: "traefik-41-2-0", Namespace: testNamespace,
 		Spec: kcmv1.ServiceTemplateSpec{
 			Helm: &kcmv1.HelmSpec{ChartSpec: &sourcev1.HelmChartSpec{Chart: "traefik", Version: "41.2.0"}},
 		},
@@ -78,8 +77,8 @@ func Test_sourceForService(t *testing.T) {
 			objects: []client.Object{
 				helmChart("chart-traefik", "traefik", "41.2.0", sourcev1.HelmRepositoryKind, "catalog", ""),
 				&sourcev1.HelmRepository{
-					ObjectMeta: metav1.ObjectMeta{Name: "catalog", Namespace: testNamespace},
-					Spec:       sourcev1.HelmRepositorySpec{Type: "oci", URL: "oci://ghcr.io/k0rdent/catalog/charts"},
+					Name: "catalog", Namespace: testNamespace,
+					Spec: sourcev1.HelmRepositorySpec{Type: "oci", URL: "oci://ghcr.io/k0rdent/catalog/charts"},
 				},
 			},
 			wantRepoURL:  "ghcr.io/k0rdent/catalog/charts",
@@ -92,8 +91,8 @@ func Test_sourceForService(t *testing.T) {
 			objects: []client.Object{
 				helmChart("chart-traefik", "traefik", "41.2.0", sourcev1.HelmRepositoryKind, "catalog", ""),
 				&sourcev1.HelmRepository{
-					ObjectMeta: metav1.ObjectMeta{Name: "catalog", Namespace: testNamespace},
-					Spec:       sourcev1.HelmRepositorySpec{URL: "https://charts.example.com"},
+					Name: "catalog", Namespace: testNamespace,
+					Spec: sourcev1.HelmRepositorySpec{URL: "https://charts.example.com"},
 				},
 			},
 			wantRepoURL:  "https://charts.example.com",
@@ -107,8 +106,8 @@ func Test_sourceForService(t *testing.T) {
 			objects: []client.Object{
 				helmChart("chart-traefik", "traefik", ">=41.0.0", sourcev1.HelmRepositoryKind, "catalog", "41.2.0"),
 				&sourcev1.HelmRepository{
-					ObjectMeta: metav1.ObjectMeta{Name: "catalog", Namespace: testNamespace},
-					Spec:       sourcev1.HelmRepositorySpec{Type: "oci", URL: "oci://ghcr.io/k0rdent/catalog/charts"},
+					Name: "catalog", Namespace: testNamespace,
+					Spec: sourcev1.HelmRepositorySpec{Type: "oci", URL: "oci://ghcr.io/k0rdent/catalog/charts"},
 				},
 			},
 			wantRepoURL:  "ghcr.io/k0rdent/catalog/charts",
@@ -122,7 +121,7 @@ func Test_sourceForService(t *testing.T) {
 			objects: []client.Object{
 				helmChart("chart-traefik", "charts/traefik", "41.2.0", sourcev1.GitRepositoryKind, "catalog-git", ""),
 				&sourcev1.GitRepository{
-					ObjectMeta: metav1.ObjectMeta{Name: "catalog-git", Namespace: testNamespace},
+					Name: "catalog-git", Namespace: testNamespace,
 					Spec: sourcev1.GitRepositorySpec{
 						URL:       "https://github.com/k0rdent/catalog.git",
 						Reference: &sourcev1.GitRepositoryRef{Tag: "v1.2.3"},
@@ -162,8 +161,8 @@ func Test_sourceForService_unsupported(t *testing.T) {
 		{
 			name: "kustomize template",
 			tmpl: &kcmv1.ServiceTemplate{
-				ObjectMeta: metav1.ObjectMeta{Name: "kust", Namespace: testNamespace},
-				Spec:       kcmv1.ServiceTemplateSpec{Kustomize: &kcmv1.SourceSpec{Path: "."}},
+				Name: "kust", Namespace: testNamespace,
+				Spec: kcmv1.ServiceTemplateSpec{Kustomize: &kcmv1.SourceSpec{Path: "."}},
 			},
 		},
 		{
@@ -171,8 +170,8 @@ func Test_sourceForService_unsupported(t *testing.T) {
 			// cluster, which Argo CD's repo server cannot read.
 			name: "chart from a flux source",
 			tmpl: &kcmv1.ServiceTemplate{
-				ObjectMeta: metav1.ObjectMeta{Name: "fluxsrc", Namespace: testNamespace},
-				Spec:       kcmv1.ServiceTemplateSpec{Helm: &kcmv1.HelmSpec{ChartSource: &kcmv1.SourceSpec{Path: "charts/traefik"}}},
+				Name: "fluxsrc", Namespace: testNamespace,
+				Spec: kcmv1.ServiceTemplateSpec{Helm: &kcmv1.HelmSpec{ChartSource: &kcmv1.SourceSpec{Path: "charts/traefik"}}},
 			},
 		},
 	} {

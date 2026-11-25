@@ -20,7 +20,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	kcmv1 "github.com/K0rdent/kcm/api/v1beta1"
@@ -28,7 +27,7 @@ import (
 )
 
 func Test_applicationName(t *testing.T) {
-	serviceSet := &kcmv1.ServiceSet{ObjectMeta: metav1.ObjectMeta{Name: "my-cluster", Namespace: "kcm-system"}}
+	serviceSet := &kcmv1.ServiceSet{Name: "my-cluster", Namespace: "kcm-system"}
 
 	require.Equal(t, "kcm-system-my-cluster-traefik-traefik",
 		applicationName(serviceSet, kcmv1.ServiceWithValues{Name: "traefik", Namespace: "traefik"}))
@@ -69,12 +68,12 @@ func Test_providerConfig_syncPolicy(t *testing.T) {
 
 func Test_resolveValues(t *testing.T) {
 	cm := &corev1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{Name: "defaults", Namespace: testNamespace},
-		Data:       map[string]string{"values.yaml": "traefik:\n  replicas: 1\n  image: base\n"},
+		Name: "defaults", Namespace: testNamespace,
+		Data: map[string]string{"values.yaml": "traefik:\n  replicas: 1\n  image: base\n"},
 	}
 	secret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{Name: "creds", Namespace: testNamespace},
-		Data:       map[string][]byte{"values.yaml": []byte("traefik:\n  image: from-secret\n")},
+		Name: "creds", Namespace: testNamespace,
+		Data: map[string][]byte{"values.yaml": []byte("traefik:\n  image: from-secret\n")},
 	}
 	cl := fake.NewClientBuilder().WithScheme(testscheme.Scheme).WithObjects(cm, secret).Build()
 
