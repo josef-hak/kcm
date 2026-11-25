@@ -63,15 +63,17 @@ concurrency:
 jobs:
   ksm:
     name: KSM
-    # Pinned, not floating: the scenarios live in another repository, and on main
-    # a change there would turn this red with nothing in this repository to
-    # explain it. Bumping the tag is a pull request like any other.
-    uses: k0rdent/ksm-tests/.github/workflows/e2e.yml@v1.4.0
+    # Not the pinned k0rdent/ksm-tests@v1.4.0 this branch is based on: the
+    # trimmed projectsveltos install is a ksm-tests change, and the only way to
+    # run KCM against it is to call the branch that carries it.
+    uses: josef-hak/ksm-tests/.github/workflows/e2e.yml@sveltos-open
     with:
-      # The same ref as the uses: line above. A called workflow cannot discover
-      # the ref it was reached at -- no context exposes it -- so it has to be
-      # told, or it checks this repository out in place of its own.
-      ksm_ref: v1.4.0
+      # The same ref and repository as the uses: line above. A called workflow
+      # cannot discover either -- in it the github context describes the caller
+      # -- so both have to be told, or it checks this repository out in place of
+      # its own.
+      ksm_ref: sveltos-open
+      ksm_repo: josef-hak/ksm-tests
       # The head commit, not the ref: a branch moves, and the run should say
       # exactly what it tested. head.repo is the fork on a fork pull request,
       # and the caller's own repository for a manual run.
