@@ -112,7 +112,7 @@ func (r *ServiceSetReconciler) ensureClusterSecret(ctx context.Context, rgnClien
 
 	secret := new(corev1.Secret)
 	key := client.ObjectKey{Namespace: r.ArgoCDNamespace, Name: name}
-	err = r.Client.Get(ctx, key, secret)
+	err = r.Get(ctx, key, secret)
 	if client.IgnoreNotFound(err) != nil {
 		return "", fmt.Errorf("failed to get cluster Secret %s: %w", key, err)
 	}
@@ -121,7 +121,7 @@ func (r *ServiceSetReconciler) ensureClusterSecret(ctx context.Context, rgnClien
 		secret.Namespace = key.Namespace
 		secret.Labels = labels
 		secret.Data = data
-		if err := r.Client.Create(ctx, secret); client.IgnoreAlreadyExists(err) != nil {
+		if err := r.Create(ctx, secret); client.IgnoreAlreadyExists(err) != nil {
 			return "", fmt.Errorf("failed to create cluster Secret %s: %w", key, err)
 		}
 		return name, nil
@@ -132,7 +132,7 @@ func (r *ServiceSetReconciler) ensureClusterSecret(ctx context.Context, rgnClien
 	}
 	secret.Labels = labels
 	secret.Data = data
-	if err := r.Client.Update(ctx, secret); err != nil {
+	if err := r.Update(ctx, secret); err != nil {
 		return "", fmt.Errorf("failed to update cluster Secret %s: %w", key, err)
 	}
 	return name, nil
@@ -150,7 +150,7 @@ func childKubeconfig(ctx context.Context, cl client.Client, clusterKey client.Ob
 		if value, ok := secret.Data["value"]; ok {
 			return value, nil
 		}
-		return nil, fmt.Errorf("Secret %s has no \"value\" key", capiKey)
+		return nil, fmt.Errorf("secret %s has no \"value\" key", capiKey)
 	}
 	if !apierrors.IsNotFound(err) {
 		return nil, fmt.Errorf("failed to get kubeconfig Secret %s: %w", capiKey, err)
@@ -163,11 +163,11 @@ func childKubeconfig(ctx context.Context, cl client.Client, clusterKey client.Ob
 	}
 	switch len(secret.Data) {
 	case 0:
-		return nil, fmt.Errorf("Secret %s has no data", adoptedKey)
+		return nil, fmt.Errorf("secret %s has no data", adoptedKey)
 	case 1:
 		for _, v := range secret.Data {
 			return v, nil
 		}
 	}
-	return nil, fmt.Errorf("Secret %s has more than one key, cannot tell which holds the kubeconfig", adoptedKey)
+	return nil, fmt.Errorf("secret %s has more than one key, cannot tell which holds the kubeconfig", adoptedKey)
 }

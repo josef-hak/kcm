@@ -51,27 +51,27 @@ import (
 )
 
 type config struct {
-	kcmTemplatesChartName               string
-	determinedRepositoryType            string
+	imagePullSecretName                 *string
+	globalK0sURL                        string
 	registryCredentialsSecretName       string
 	registryCertSecretName              string
-	imagePullSecretName                 *string
+	determinedRepositoryType            string
 	globalRegistry                      string
-	globalK0sURL                        string
+	argoCDNamespace                     string
 	k0sURLCertSecretName                string
 	templatesRepoURL                    string
+	kcmTemplatesChartName               string
 	defaultHelmTimeout                  time.Duration
 	capiClusterPollInterval             time.Duration
 	maxConcurrentReconciles             int
 	insecureRegistry                    bool
-	createAccessManagement              bool
 	enableWebhook                       bool
 	createRelease                       bool
 	createTemplates                     bool
 	enableSveltosCtrl                   bool
 	enableSveltosExpireCtrl             bool
 	enableArgoCDCtrl                    bool
-	argoCDNamespace                     string
+	createAccessManagement              bool
 	enableInPlaceUpdates                bool
 	enableInPlaceVersionWithDeleteFirst bool
 	createManagement                    bool

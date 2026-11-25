@@ -63,6 +63,18 @@ import (
 	validationutil "github.com/K0rdent/kcm/internal/util/validation"
 )
 
+const (
+	appsAPIGroupVersion = "apps/v1"
+	deploymentKind      = "Deployment"
+
+	// What every Deployment the built-in StateManagementProviders point at is
+	// judged by: the KCM controller itself for both adapters, and the Sveltos
+	// addon-controller for its provisioner.
+	deploymentReadyRule = `self.status.availableReplicas == self.status.replicas &&
+self.status.availableReplicas == self.status.updatedReplicas &&
+self.status.availableReplicas == self.status.readyReplicas`
+)
+
 // ManagementReconciler reconciles a Management object
 type ManagementReconciler struct {
 	Client                        client.Client
@@ -425,9 +437,6 @@ func (r *ManagementReconciler) ensureStateManagementProvider(ctx context.Context
 	currentKcmName := os.Getenv("KCM_NAME")
 
 	const (
-		appsAPIGroupVersion = "apps/v1"
-		deploymentKind      = "Deployment"
-
 		projectSveltosDeploymentName      = "addon-controller"
 		projectSveltosDeploymentNamespace = "projectsveltos"
 		profilesResource                  = "profiles"
@@ -455,23 +464,19 @@ func (r *ManagementReconciler) ensureStateManagementProvider(ctx context.Context
 				},
 			},
 			Adapter: kcmv1.ResourceReference{
-				APIVersion: appsAPIGroupVersion,
-				Kind:       deploymentKind,
-				Name:       currentKcmName,
-				Namespace:  currentNamespace,
-				ReadinessRule: `self.status.availableReplicas == self.status.replicas &&
-self.status.availableReplicas == self.status.updatedReplicas &&
-self.status.availableReplicas == self.status.readyReplicas`,
+				APIVersion:    appsAPIGroupVersion,
+				Kind:          deploymentKind,
+				Name:          currentKcmName,
+				Namespace:     currentNamespace,
+				ReadinessRule: deploymentReadyRule,
 			},
 			Provisioner: []kcmv1.ResourceReference{
 				{
-					APIVersion: appsAPIGroupVersion,
-					Kind:       deploymentKind,
-					Name:       projectSveltosDeploymentName,
-					Namespace:  projectSveltosDeploymentNamespace,
-					ReadinessRule: `self.status.availableReplicas == self.status.replicas &&
-self.status.availableReplicas == self.status.updatedReplicas &&
-self.status.availableReplicas == self.status.readyReplicas`,
+					APIVersion:    appsAPIGroupVersion,
+					Kind:          deploymentKind,
+					Name:          projectSveltosDeploymentName,
+					Namespace:     projectSveltosDeploymentNamespace,
+					ReadinessRule: deploymentReadyRule,
 				},
 			},
 			ProvisionerCRDs: []kcmv1.ProvisionerCRD{
@@ -536,25 +541,23 @@ self.status.readyReplicas == self.status.replicas`
 				},
 			},
 			Adapter: kcmv1.ResourceReference{
-				APIVersion: "apps/v1",
-				Kind:       "Deployment",
-				Name:       os.Getenv("KCM_NAME"),
-				Namespace:  kubeutil.CurrentNamespace(),
-				ReadinessRule: `self.status.availableReplicas == self.status.replicas &&
-self.status.availableReplicas == self.status.updatedReplicas &&
-self.status.availableReplicas == self.status.readyReplicas`,
+				APIVersion:    appsAPIGroupVersion,
+				Kind:          deploymentKind,
+				Name:          os.Getenv("KCM_NAME"),
+				Namespace:     kubeutil.CurrentNamespace(),
+				ReadinessRule: deploymentReadyRule,
 			},
 			Provisioner: []kcmv1.ResourceReference{
 				{
-					APIVersion:    "apps/v1",
+					APIVersion:    appsAPIGroupVersion,
 					Kind:          "StatefulSet",
 					Name:          argoCDApplicationController,
 					Namespace:     argoCDNamespace,
 					ReadinessRule: workloadReadyRule,
 				},
 				{
-					APIVersion:    "apps/v1",
-					Kind:          "Deployment",
+					APIVersion:    appsAPIGroupVersion,
+					Kind:          deploymentKind,
 					Name:          argoCDRepoServer,
 					Namespace:     argoCDNamespace,
 					ReadinessRule: workloadReadyRule,

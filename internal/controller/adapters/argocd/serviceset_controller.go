@@ -271,7 +271,7 @@ func (r *ServiceSetReconciler) ensureApplication(
 		return "", fmt.Errorf("failed to get ServiceTemplate %s: %w", tmplKey, err)
 	}
 
-	src, repo, err := sourceForService(ctx, r.Client, serviceSet.Namespace, svc, tmpl)
+	src, repo, err := sourceForService(ctx, r.Client, svc, tmpl)
 	if err != nil {
 		return "", err
 	}
@@ -490,8 +490,10 @@ func (r *ServiceSetReconciler) reconcileDelete(ctx context.Context, serviceSet *
 // with a growing back-off, so a service that can never apply holds up the
 // removal of the whole ServiceSet for minutes.
 func (r *ServiceSetReconciler) terminateOperation(ctx context.Context, app *unstructured.Unstructured) error {
-	phase, found, err := unstructured.NestedString(app.Object, "status", "operationState", "phase")
-	if err != nil || !found || phase != operationRunning {
+	// A phase that is missing or not a string is not an operation in flight,
+	// and NestedString reports both as not-found.
+	phase, found, _ := unstructured.NestedString(app.Object, "status", "operationState", "phase")
+	if !found || phase != operationRunning {
 		return nil
 	}
 	if err := unstructured.SetNestedField(app.Object, operationTerminating, "status", "operationState", "phase"); err != nil {

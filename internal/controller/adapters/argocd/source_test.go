@@ -28,11 +28,15 @@ import (
 	testscheme "github.com/K0rdent/kcm/test/scheme"
 )
 
-const testNamespace = "kcm-system"
+const (
+	testNamespace = "kcm-system"
+	// The HelmChart every ServiceTemplate in this file points at.
+	testChartRef = "chart-traefik"
+)
 
-func helmChart(name, chart, version, repoKind, repoName string, artifactRevision string) *sourcev1.HelmChart {
+func helmChart(chart, version, repoKind, repoName, artifactRevision string) *sourcev1.HelmChart {
 	hc := &sourcev1.HelmChart{
-		Name: name, Namespace: testNamespace,
+		Name: testChartRef, Namespace: testNamespace,
 		Spec: sourcev1.HelmChartSpec{
 			Chart:     chart,
 			Version:   version,
@@ -75,7 +79,7 @@ func Test_sourceForService(t *testing.T) {
 			// Argo CD takes the registry without the scheme.
 			name: "OCI repository",
 			objects: []client.Object{
-				helmChart("chart-traefik", "traefik", "41.2.0", sourcev1.HelmRepositoryKind, "catalog", ""),
+				helmChart("traefik", "41.2.0", sourcev1.HelmRepositoryKind, "catalog", ""),
 				&sourcev1.HelmRepository{
 					Name: "catalog", Namespace: testNamespace,
 					Spec: sourcev1.HelmRepositorySpec{Type: "oci", URL: "oci://ghcr.io/k0rdent/catalog/charts"},
@@ -89,7 +93,7 @@ func Test_sourceForService(t *testing.T) {
 		{
 			name: "classic HTTP repository",
 			objects: []client.Object{
-				helmChart("chart-traefik", "traefik", "41.2.0", sourcev1.HelmRepositoryKind, "catalog", ""),
+				helmChart("traefik", "41.2.0", sourcev1.HelmRepositoryKind, "catalog", ""),
 				&sourcev1.HelmRepository{
 					Name: "catalog", Namespace: testNamespace,
 					Spec: sourcev1.HelmRepositorySpec{URL: "https://charts.example.com"},
@@ -104,7 +108,7 @@ func Test_sourceForService(t *testing.T) {
 			// that is the one the cluster actually got.
 			name: "artifact revision wins over the spec version",
 			objects: []client.Object{
-				helmChart("chart-traefik", "traefik", ">=41.0.0", sourcev1.HelmRepositoryKind, "catalog", "41.2.0"),
+				helmChart("traefik", ">=41.0.0", sourcev1.HelmRepositoryKind, "catalog", "41.2.0"),
 				&sourcev1.HelmRepository{
 					Name: "catalog", Namespace: testNamespace,
 					Spec: sourcev1.HelmRepositorySpec{Type: "oci", URL: "oci://ghcr.io/k0rdent/catalog/charts"},
@@ -119,7 +123,7 @@ func Test_sourceForService(t *testing.T) {
 			// A git chart is a path in a repository, not a chart name.
 			name: "git repository",
 			objects: []client.Object{
-				helmChart("chart-traefik", "charts/traefik", "41.2.0", sourcev1.GitRepositoryKind, "catalog-git", ""),
+				helmChart("charts/traefik", "41.2.0", sourcev1.GitRepositoryKind, "catalog-git", ""),
 				&sourcev1.GitRepository{
 					Name: "catalog-git", Namespace: testNamespace,
 					Spec: sourcev1.GitRepositorySpec{
@@ -137,7 +141,7 @@ func Test_sourceForService(t *testing.T) {
 			cl := fake.NewClientBuilder().WithScheme(testscheme.Scheme).WithObjects(tc.objects...).Build()
 			svc := kcmv1.ServiceWithValues{Name: "traefik", Namespace: "traefik", Template: "traefik-41-2-0"}
 
-			src, repo, err := sourceForService(t.Context(), cl, testNamespace, svc, serviceTemplate("chart-traefik"))
+			src, repo, err := sourceForService(t.Context(), cl, svc, serviceTemplate(testChartRef))
 			require.NoError(t, err)
 			require.Equal(t, tc.wantRepoURL, src.RepoURL)
 			require.Equal(t, tc.wantChart, src.Chart)
@@ -176,7 +180,7 @@ func Test_sourceForService_unsupported(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			_, _, err := sourceForService(t.Context(), cl, testNamespace, svc, tc.tmpl)
+			_, _, err := sourceForService(t.Context(), cl, svc, tc.tmpl)
 			require.ErrorIs(t, err, errUnsupportedServiceTemplate)
 		})
 	}

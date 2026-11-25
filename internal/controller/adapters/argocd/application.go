@@ -92,9 +92,9 @@ type applicationSpec struct {
 	Source               *applicationSource     `json:"source,omitempty"`
 	SyncPolicy           *syncPolicy            `json:"syncPolicy,omitempty"`
 	RevisionHistoryLimit *int64                 `json:"revisionHistoryLimit,omitempty"`
+	Destination          applicationDestination `json:"destination"`
 	Project              string                 `json:"project"`
 	IgnoreDifferences    []map[string]any       `json:"ignoreDifferences,omitempty"`
-	Destination          applicationDestination `json:"destination"`
 }
 
 type applicationSource struct {

@@ -55,7 +55,6 @@ type helmRepository struct {
 func sourceForService(
 	ctx context.Context,
 	c client.Client,
-	namespace string,
 	svc kcmv1.ServiceWithValues,
 	tmpl *kcmv1.ServiceTemplate,
 ) (*applicationSource, *helmRepository, error) {
@@ -209,7 +208,7 @@ func (r *ServiceSetReconciler) ensureRepository(ctx context.Context, namespace s
 	secret.Name = repositorySecretName(repo.url)
 	secret.Namespace = r.ArgoCDNamespace
 	key := client.ObjectKeyFromObject(secret)
-	err := r.Client.Get(ctx, key, secret)
+	err := r.Get(ctx, key, secret)
 	if client.IgnoreNotFound(err) != nil {
 		return fmt.Errorf("failed to get repository Secret %s: %w", key, err)
 	}
@@ -223,7 +222,7 @@ func (r *ServiceSetReconciler) ensureRepository(ctx context.Context, namespace s
 		secret.Namespace = key.Namespace
 		secret.Labels = labels
 		secret.Data = data
-		if err := r.Client.Create(ctx, secret); client.IgnoreAlreadyExists(err) != nil {
+		if err := r.Create(ctx, secret); client.IgnoreAlreadyExists(err) != nil {
 			return fmt.Errorf("failed to create repository Secret %s: %w", key, err)
 		}
 		return nil
@@ -234,7 +233,7 @@ func (r *ServiceSetReconciler) ensureRepository(ctx context.Context, namespace s
 	}
 	secret.Labels = labels
 	secret.Data = data
-	if err := r.Client.Update(ctx, secret); err != nil {
+	if err := r.Update(ctx, secret); err != nil {
 		return fmt.Errorf("failed to update repository Secret %s: %w", key, err)
 	}
 	return nil
@@ -256,7 +255,7 @@ func repositoryCredentials(ctx context.Context, c client.Client, namespace strin
 
 	dockerconfig, ok := secret.Data[corev1.DockerConfigJsonKey]
 	if !ok {
-		return "", "", fmt.Errorf("Secret %s has neither username/password nor %s", key, corev1.DockerConfigJsonKey)
+		return "", "", fmt.Errorf("secret %s has neither username/password nor %s", key, corev1.DockerConfigJsonKey)
 	}
 
 	var config struct {
@@ -285,7 +284,7 @@ func repositoryCredentials(ctx context.Context, c client.Client, namespace strin
 		return decoded[0], decoded[1], nil
 	}
 
-	return "", "", fmt.Errorf("Secret %s has no credentials for registry %s", key, registry)
+	return "", "", fmt.Errorf("secret %s has no credentials for registry %s", key, registry)
 }
 
 func decodeBasicAuth(auth string) ([2]string, error) {
