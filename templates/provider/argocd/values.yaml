@@ -11,3 +11,11 @@ argo-cd:
     enabled: false
   notifications:
     enabled: false
+
+  # The chart's default redis comes from ecr-public.aws.com, whose anonymous
+  # pull quota CI runners exhaust ("429 Data limit exceeded"), leaving the
+  # argocd component unhealthy. Docker Hub serves the same image and is already
+  # the source of the other components' images.
+  redis:
+    image:
+      repository: docker.io/library/redis
