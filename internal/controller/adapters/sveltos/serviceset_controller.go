@@ -118,8 +118,22 @@ type ServiceSetReconciler struct {
 	AdapterName      string
 	AdapterNamespace string
 
+	// ProviderName is the StateManagementProvider this adapter serves. Another
+	// built-in adapter can be hosted by the same workload - the Argo CD one is -
+	// so matching the adapter reference alone no longer tells the two apart.
+	ProviderName string
+
 	MaxConcurrentReconciles int
 	requeueInterval         time.Duration
+}
+
+// serves reports whether the given provider is the one this adapter is
+// responsible for.
+func (r *ServiceSetReconciler) serves(smp *kcmv1.StateManagementProvider) bool {
+	if r.ProviderName != "" && smp.Name != r.ProviderName {
+		return false
+	}
+	return smp.Spec.Adapter.Name == r.AdapterName && smp.Spec.Adapter.Namespace == r.AdapterNamespace
 }
 
 func (r *ServiceSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (result ctrl.Result, err error) {
@@ -154,6 +168,10 @@ func (r *ServiceSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	smp := new(kcmv1.StateManagementProvider)
 	if err = r.Get(ctx, client.ObjectKey{Name: serviceSet.Spec.Provider.Name}, smp); err != nil {
 		return ctrl.Result{}, err
+	}
+	if !r.serves(smp) {
+		l.V(1).Info("ServiceSet is not served by this adapter, skipping", "provider", smp.Name)
+		return ctrl.Result{}, nil
 	}
 
 	continueReconciliation, err := labelsMatchSelector(serviceSet.Labels, smp.Spec.Selector)
@@ -553,7 +571,7 @@ func (r *ServiceSetReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	// events faster than controller will reconcile objects, we will have a 10-fold
 	// capacity reserve for event channel.
 	poller := pollerutil.NewRunner(
-		enqueueClusterSummary(r.Client, r.SystemNamespace),
+		enqueueClusterSummary(r.Client, r.SystemNamespace, r.serves),
 		pollerutil.WithInterval(r.requeueInterval),
 		pollerutil.WithBufferSize(r.MaxConcurrentReconciles*10),
 		pollerutil.WithName("poller-cluster-summaries"),
@@ -581,8 +599,7 @@ func (r *ServiceSetReconciler) SetupWithManager(mgr ctrl.Manager) error {
 				}
 				return nil, fmt.Errorf("failed to get StateManagementProvider %s: %w", serviceSet.Spec.Provider.Name, err)
 			}
-			if provider.Spec.Adapter.Name != r.AdapterName ||
-				provider.Spec.Adapter.Namespace != r.AdapterNamespace {
+			if !r.serves(provider) {
 				return nil, nil
 			}
 			return []ctrl.Request{
@@ -597,8 +614,7 @@ func (r *ServiceSetReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			if !ok {
 				return nil, nil
 			}
-			if provider.Spec.Adapter.Name != r.AdapterName ||
-				provider.Spec.Adapter.Namespace != r.AdapterNamespace {
+			if !r.serves(provider) {
 				return nil, nil
 			}
 

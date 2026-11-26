@@ -1,0 +1,22 @@
+argo-cd:
+  # Pins the names of the workloads the StateManagementProvider refers to:
+  # without it they carry the Helm release name, which KCM derives from the
+  # cluster the component is installed on.
+  fullnameOverride: argocd
+
+  # KCM drives Argo CD through Application objects only. The components that
+  # serve the UI's extras cost pods on every management cluster and nothing
+  # reads them.
+  dex:
+    enabled: false
+  notifications:
+    enabled: false
+
+  # The chart's default redis comes from ecr-public.aws.com, whose anonymous
+  # pull quota CI runners exhaust ("429 Data limit exceeded"), leaving the
+  # argocd component unhealthy. mirror.gcr.io is a pull-through cache of the
+  # same Docker Hub image with no anonymous limit -- unlike docker.io itself,
+  # which meters anonymous pulls per IP and so has the same failure mode.
+  redis:
+    image:
+      repository: mirror.gcr.io/library/redis

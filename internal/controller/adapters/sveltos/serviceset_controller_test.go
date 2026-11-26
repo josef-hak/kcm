@@ -110,10 +110,15 @@ var _ = Describe("ServiceSet Controller integration tests", Ordered, func() {
 		})
 
 		By("creating reconciler", func() {
+			// The adapter reference has to match what
+			// prepareStateManagementProvider writes, or Reconcile stops at
+			// the check that keeps this adapter off another one's ServiceSets.
 			reconciler = ServiceSetReconciler{
-				Client:          cl,
-				timeFunc:        func() time.Time { return time.Date(2025, 12, 1, 0, 0, 0, 0, time.UTC) },
-				requeueInterval: 1 * time.Second,
+				Client:           cl,
+				timeFunc:         func() time.Time { return time.Date(2025, 12, 1, 0, 0, 0, 0, time.UTC) },
+				requeueInterval:  1 * time.Second,
+				AdapterName:      adapterName,
+				AdapterNamespace: adapterNamespace,
 			}
 		})
 	})

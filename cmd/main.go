@@ -36,6 +36,8 @@ import (
 	kcmv1 "github.com/K0rdent/kcm/api/v1beta1"
 	"github.com/K0rdent/kcm/internal/build"
 	"github.com/K0rdent/kcm/internal/controller"
+	"github.com/K0rdent/kcm/internal/controller/adapters/argocd"
+	"github.com/K0rdent/kcm/internal/controller/adapters/flux"
 	"github.com/K0rdent/kcm/internal/controller/adapters/sveltos"
 	"github.com/K0rdent/kcm/internal/controller/ipam"
 	"github.com/K0rdent/kcm/internal/controller/region"
@@ -50,25 +52,28 @@ import (
 )
 
 type config struct {
-	kcmTemplatesChartName               string
-	determinedRepositoryType            string
+	imagePullSecretName                 *string
+	globalK0sURL                        string
 	registryCredentialsSecretName       string
 	registryCertSecretName              string
-	imagePullSecretName                 *string
+	determinedRepositoryType            string
 	globalRegistry                      string
-	globalK0sURL                        string
+	argoCDNamespace                     string
 	k0sURLCertSecretName                string
 	templatesRepoURL                    string
+	kcmTemplatesChartName               string
 	defaultHelmTimeout                  time.Duration
 	capiClusterPollInterval             time.Duration
 	maxConcurrentReconciles             int
 	insecureRegistry                    bool
-	createAccessManagement              bool
 	enableWebhook                       bool
 	createRelease                       bool
 	createTemplates                     bool
 	enableSveltosCtrl                   bool
 	enableSveltosExpireCtrl             bool
+	enableFluxCtrl                      bool
+	enableArgoCDCtrl                    bool
+	createAccessManagement              bool
 	enableInPlaceUpdates                bool
 	enableInPlaceVersionWithDeleteFirst bool
 	createManagement                    bool
@@ -107,6 +112,9 @@ func main() {
 		leaderElectionNamespace             string
 		enableSveltosCtrl                   bool
 		enableSveltosExpireCtrl             bool
+		enableFluxCtrl                      bool
+		enableArgoCDCtrl                    bool
+		argoCDNamespace                     string
 		enableInPlaceUpdates                bool
 		enableInPlaceVersionWithDeleteFirst bool
 		defaultHelmTimeout                  time.Duration
@@ -151,6 +159,9 @@ func main() {
 	flag.StringVar(&pprofBindAddress, "pprof-bind-address", "", "The TCP address that the controller should bind to for serving pprof, \"0\" or empty value disables pprof")
 	flag.BoolVar(&enableSveltosCtrl, "enable-sveltos-ctrl", true, "Enable Sveltos built-in provider controller")
 	flag.BoolVar(&enableSveltosExpireCtrl, "enable-sveltos-expire-ctrl", false, "Enable SveltosCluster stuck (expired) tokens controller")
+	flag.BoolVar(&enableFluxCtrl, "enable-flux-ctrl", false, "Enable the Flux built-in state management provider controller")
+	flag.BoolVar(&enableArgoCDCtrl, "enable-argocd-ctrl", false, "Enable Argo CD built-in provider controller")
+	flag.StringVar(&argoCDNamespace, "argocd-namespace", argocd.DefaultArgoCDNamespace, "The namespace Argo CD runs in, where the adapter writes Application objects")
 	flag.BoolVar(&enableInPlaceUpdates, "enable-in-place-updates", false,
 		"Enable Cluster API in-place updates (experimental), passed as global.enableInPlaceUpdates value to the providers")
 	flag.BoolVar(&enableInPlaceVersionWithDeleteFirst, "enable-in-place-version-with-delete-first", false,
@@ -286,6 +297,9 @@ func main() {
 		kcmTemplatesChartName:               kcmTemplatesChartName,
 		enableSveltosCtrl:                   enableSveltosCtrl,
 		enableSveltosExpireCtrl:             enableSveltosExpireCtrl,
+		enableFluxCtrl:                      enableFluxCtrl,
+		enableArgoCDCtrl:                    enableArgoCDCtrl,
+		argoCDNamespace:                     argoCDNamespace,
 		enableInPlaceUpdates:                enableInPlaceUpdates,
 		enableInPlaceVersionWithDeleteFirst: enableInPlaceVersionWithDeleteFirst,
 		defaultHelmTimeout:                  defaultHelmTimeout,
@@ -381,6 +395,7 @@ func setupControllers(mgr ctrl.Manager, currentNamespace string, cfg config) err
 		CAPIClusterPollInterval:             cfg.capiClusterPollInterval,
 		EnableInPlaceUpdates:                cfg.enableInPlaceUpdates,
 		EnableInPlaceVersionWithDeleteFirst: cfg.enableInPlaceVersionWithDeleteFirst,
+		EnableFluxAdapter:                   cfg.enableFluxCtrl,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Management")
 		return err
@@ -488,12 +503,44 @@ func setupControllers(mgr ctrl.Manager, currentNamespace string, cfg config) err
 			SystemNamespace:         currentNamespace,
 			AdapterName:             deploymentName,
 			AdapterNamespace:        currentNamespace,
+			ProviderName:            kubeutil.DefaultStateManagementProvider,
 			MaxConcurrentReconciles: cfg.maxConcurrentReconciles,
 		}).SetupWithManager(mgr); err != nil {
 			setupLog.Error(err, "unable to create controller", "controller", "ServiceSet")
 			return err
 		}
 		setupLog.Info("setup for ServiceSet controller successful")
+	}
+
+	if cfg.enableArgoCDCtrl {
+		setupLog.Info("setting up built-in Argo CD ServiceSet controller")
+		if err = (&argocd.ServiceSetReconciler{
+			SystemNamespace:         currentNamespace,
+			ArgoCDNamespace:         cfg.argoCDNamespace,
+			AdapterName:             os.Getenv("KCM_NAME"),
+			AdapterNamespace:        currentNamespace,
+			ProviderName:            kubeutil.ArgoCDStateManagementProvider,
+			MaxConcurrentReconciles: cfg.maxConcurrentReconciles,
+		}).SetupWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create controller", "controller", "ServiceSet")
+			return err
+		}
+		setupLog.Info("setup for Argo CD ServiceSet controller successful")
+	}
+
+	if cfg.enableFluxCtrl {
+		setupLog.Info("setting up built-in Flux ServiceSet controller")
+		if err = (&flux.ServiceSetReconciler{
+			SystemNamespace:         currentNamespace,
+			AdapterName:             os.Getenv("KCM_NAME"),
+			AdapterNamespace:        currentNamespace,
+			ProviderName:            kubeutil.FluxStateManagementProvider,
+			MaxConcurrentReconciles: cfg.maxConcurrentReconciles,
+		}).SetupWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create controller", "controller", "ServiceSet")
+			return err
+		}
+		setupLog.Info("setup for Flux ServiceSet controller successful")
 	}
 
 	if cfg.enableSveltosExpireCtrl {

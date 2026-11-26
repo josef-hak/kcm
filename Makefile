@@ -408,6 +408,37 @@ kind-deploy: kind ## Create a kind cluster if it does not exist.
 			 sysctl -p /etc/sysctl.conf"; \
 	fi
 
+# Charts whose images are pulled on the host and side-loaded into the kind node
+# before the test run reaches them. The point is the anonymous pull quota of a
+# public registry: exhaust it mid-test and the component sits in
+# ImagePullBackOff until the suite gives up on the whole Management. Side-loaded
+# images are already present, so kubelet never asks.
+PRELOAD_CHARTS ?= argocd
+# One platform, not the whole index: with the containerd image store docker
+# keeps the attestation manifests too, and importing those into the node fails
+# on blobs the host never pulled ("content digest ... not found").
+PRELOAD_PLATFORM ?= linux/$(HOSTARCH)
+
+.PHONY: kind-preload
+kind-preload: kind helm ## Pull the images $(PRELOAD_CHARTS) render and load them into the kind cluster.
+	@for chart in $(PRELOAD_CHARTS); do \
+		$(HELM) dependency build $(PROVIDER_TEMPLATES_DIR)/$$chart >/dev/null 2>&1 \
+			|| $(HELM) dependency update $(PROVIDER_TEMPLATES_DIR)/$$chart >/dev/null; \
+		for image in $$($(HELM) template preload $(PROVIDER_TEMPLATES_DIR)/$$chart \
+				| sed -n 's/^[[:space:]]*image:[[:space:]]*"\?\([^"[:space:]]*\)"\?[[:space:]]*$$/\1/p' \
+				| sort -u); do \
+			echo "Preloading $$image"; \
+			archive=$$(mktemp); \
+			if $(CONTAINER_TOOL) pull -q "$$image" >/dev/null \
+				&& { $(CONTAINER_TOOL) save --platform $(PRELOAD_PLATFORM) -o "$$archive" "$$image" 2>/dev/null \
+					|| $(CONTAINER_TOOL) save -o "$$archive" "$$image"; } \
+				&& $(KIND) load image-archive --name $(KIND_CLUSTER_NAME) "$$archive"; then :; else \
+				echo "WARNING: could not preload $$image, leaving it to the kubelet"; \
+			fi; \
+			rm -f "$$archive"; \
+		done; \
+	done
+
 .PHONY: kind-undeploy
 kind-undeploy: kind ## Delete the kind cluster if it exists.
 	@if $(KIND) get clusters | grep -q "^$(KIND_CLUSTER_NAME)$$"; then \
@@ -492,7 +523,7 @@ dev-release: yq ## Apply release object for current VERSION.
 	@$(YQ) e ".spec.version = \"${VERSION}\"" $(PROVIDER_TEMPLATES_DIR)/kcm-templates/files/release.yaml | $(KUBECTL) -n $(NAMESPACE) apply -f -
 
 .PHONY: dev-apply
-dev-apply: kind-deploy registry-deploy dev-push dev-deploy dev-templates dev-release ## Deploy full local development environment.
+dev-apply: kind-deploy kind-preload registry-deploy dev-push dev-deploy dev-templates dev-release ## Deploy full local development environment.
 
 .PHONY: dev-upgrade
 dev-upgrade: VALUES_FILE ?= config/dev/kcm_values.yaml
@@ -504,7 +535,7 @@ dev-upgrade: yq set-kcm-version generate-all dev-push dev-templates ## Upgrade d
 PUBLIC_REPO ?= false
 
 .PHONY: test-apply
-test-apply: kind-deploy ## Prepare environment and deploy artifacts for test runs.
+test-apply: kind-deploy kind-preload ## Prepare environment and deploy artifacts for test runs.
 	@if [ "$(PUBLIC_REPO)" != "true" ]; then \
 	  $(MAKE) registry-deploy dev-push; \
 	else \

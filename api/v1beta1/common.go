@@ -74,6 +74,8 @@ const (
 	ProviderK0smotronName = "k0smotron"
 	// Provider Sveltos
 	ProviderSveltosName = "projectsveltos"
+	// Provider Argo CD
+	ProviderArgoCDName = "argocd"
 )
 
 // SecretKeyReference is the combination of the Secret reference and the key of the stored value.

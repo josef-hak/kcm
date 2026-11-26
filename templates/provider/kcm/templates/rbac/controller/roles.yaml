@@ -298,6 +298,12 @@ rules:
   - clusterconfigurations
   verbs: {{ include "rbac.editorVerbs" . | nindent 4 }}
 - apiGroups:
+  - argoproj.io
+  resources:
+  - applications
+  - appprojects
+  verbs: {{ include "rbac.editorVerbs" . | nindent 4 }}
+- apiGroups:
   - k0rdent.mirantis.com
   resources:
   - multiclusterservices
@@ -366,7 +372,12 @@ rules:
   - apps
   resources:
   - deployments
+  # The StateManagementProvider controller reads the workloads an adapter and
+  # its provisioners name to evaluate their readiness rules; Argo CD runs its
+  # application controller as a StatefulSet.
+  - statefulsets
   verbs:
+  - get
   - list
   - watch
   - patch

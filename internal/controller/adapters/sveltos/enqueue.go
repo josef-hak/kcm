@@ -154,7 +154,7 @@ func pruneEnqueueStates(seen map[client.ObjectKey]struct{}) {
 // entries are pruned when a ServiceSet disappears from the poller's List.
 //
 // Regional clients are cached per tick.
-func enqueueClusterSummary(cl client.Client, systemNamespace string) pollerutil.EnqueueFunc[*kcmv1.ServiceSet] {
+func enqueueClusterSummary(cl client.Client, systemNamespace string, serves func(*kcmv1.StateManagementProvider) bool) pollerutil.EnqueueFunc[*kcmv1.ServiceSet] {
 	return func(ctx context.Context) ([]*kcmv1.ServiceSet, error) {
 		logger := ctrl.LoggerFrom(ctx)
 
@@ -177,6 +177,11 @@ func enqueueClusterSummary(cl client.Client, systemNamespace string) pollerutil.
 
 			if !serviceSet.GetDeletionTimestamp().IsZero() {
 				logger.V(1).Info("ServiceSet is being deleted, skipping polling", "service_set", key)
+				continue
+			}
+			if !servedBy(ctx, cl, serviceSet, serves) {
+				// Another adapter's ServiceSet: no Profile will ever exist
+				// for it, and polling one logs a not-found every tick.
 				continue
 			}
 			seenThisTick[key] = struct{}{}
@@ -219,4 +224,15 @@ func enqueueClusterSummary(cl client.Client, systemNamespace string) pollerutil.
 
 		return out, nil
 	}
+}
+
+// servedBy reports whether this adapter is the one responsible for the
+// ServiceSet. An unreadable provider counts as ours, so a transient API error
+// does not silently stop polling a ServiceSet that is in fact ours.
+func servedBy(ctx context.Context, cl client.Client, serviceSet *kcmv1.ServiceSet, serves func(*kcmv1.StateManagementProvider) bool) bool {
+	provider := new(kcmv1.StateManagementProvider)
+	if err := cl.Get(ctx, client.ObjectKey{Name: serviceSet.Spec.Provider.Name}, provider); err != nil {
+		return true
+	}
+	return serves(provider)
 }

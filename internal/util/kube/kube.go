@@ -29,10 +29,35 @@ import (
 const (
 	DefaultSystemNamespace         = "kcm-system"
 	DefaultStateManagementProvider = "ksm-projectsveltos"
+	// FluxStateManagementProvider is the name of the Flux-backed provider. It is
+	// opt-in: a ServiceSet reaches it only by naming it in .spec.provider.name.
+	FluxStateManagementProvider = "ksm-flux"
+	// ArgoCDStateManagementProvider is the built-in provider that deploys
+	// services through Argo CD.
+	ArgoCDStateManagementProvider = "ksm-argocd"
 
 	DefaultStateManagementProviderSelectorKey   = "ksm.k0rdent.mirantis.com/adapter"
 	DefaultStateManagementProviderSelectorValue = "kcm-controller-manager"
+	// FluxStateManagementProviderSelectorValue and the Argo CD one below label
+	// the ServiceSets each adapter is responsible for. A value of its own is
+	// what keeps the built-in adapters, hosted by the same workload, apart.
+	FluxStateManagementProviderSelectorValue   = "kcm-controller-manager-flux"
+	ArgoCDStateManagementProviderSelectorValue = "kcm-controller-manager-argocd"
+
+	// DefaultStateManagementProviderEnvName overrides, for the whole
+	// installation, the provider a ClusterDeployment or MultiClusterService
+	// gets when it names none.
+	DefaultStateManagementProviderEnvName = "DEFAULT_STATE_MANAGEMENT_PROVIDER"
 )
+
+// DefaultStateManagementProviderName is the [StateManagementProvider] used for
+// services whose spec does not name one.
+func DefaultStateManagementProviderName() string {
+	if name := os.Getenv(DefaultStateManagementProviderEnvName); name != "" {
+		return name
+	}
+	return DefaultStateManagementProvider
+}
 
 func EnsureDeleteAllOf(ctx context.Context, cl client.Client, gvk schema.GroupVersionKind, opts *client.ListOptions) (requeue bool, err error) {
 	l := ctrl.LoggerFrom(ctx).V(1).WithName("ensure-delete")

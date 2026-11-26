@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -62,6 +63,18 @@ import (
 	validationutil "github.com/K0rdent/kcm/internal/util/validation"
 )
 
+const (
+	appsAPIGroupVersion = "apps/v1"
+	deploymentKind      = "Deployment"
+
+	// What every Deployment the built-in StateManagementProviders point at is
+	// judged by: the KCM controller itself for both adapters, and the Sveltos
+	// addon-controller for its provisioner.
+	deploymentReadyRule = `self.status.availableReplicas == self.status.replicas &&
+self.status.availableReplicas == self.status.updatedReplicas &&
+self.status.availableReplicas == self.status.readyReplicas`
+)
+
 // ManagementReconciler reconciles a Management object
 type ManagementReconciler struct {
 	Client                        client.Client
@@ -84,8 +97,9 @@ type ManagementReconciler struct {
 	IsDisabledValidationWH              bool // is webhook disabled set via the controller flags
 	EnableInPlaceUpdates                bool // passed to the components
 	EnableInPlaceVersionWithDeleteFirst bool // passed to the components
+	EnableFluxAdapter                   bool // creates the Flux-backed StateManagementProvider
 
-	sveltosDependentControllersStarted bool
+	dependentControllersStarted bool
 }
 
 const cldRegSecretName string = "cld-registry-credentials"
@@ -189,6 +203,18 @@ func (r *ManagementReconciler) update(ctx context.Context, management *kcmv1.Man
 	if err := r.ensureStateManagementProvider(ctx, management); err != nil {
 		r.warnf(management, "EnsureStateManagementProviderFailed", "failed to ensure StateManagementProvider is created: %v", err)
 		l.Error(err, "failed to ensure StateManagementProvider is created")
+	}
+
+	if err := r.ensureArgoCDStateManagementProvider(ctx, management); err != nil {
+		r.warnf(management, "EnsureStateManagementProviderFailed", "failed to ensure Argo CD StateManagementProvider is created: %v", err)
+		l.Error(err, "failed to ensure Argo CD StateManagementProvider is created")
+	}
+
+	if r.EnableFluxAdapter {
+		if err := r.ensureFluxStateManagementProvider(ctx, management); err != nil {
+			r.warnf(management, "EnsureStateManagementProviderFailed", "failed to ensure Flux StateManagementProvider is created: %v", err)
+			l.Error(err, "failed to ensure Flux StateManagementProvider is created")
+		}
 	}
 
 	opts := components.ReconcileComponentsOpts{
@@ -305,19 +331,40 @@ func (r *ManagementReconciler) validateManagement(ctx context.Context, managemen
 // startDependentControllers starts controllers that cannot be started
 // at process startup because of some dependency like CRDs being present.
 func (r *ManagementReconciler) startDependentControllers(ctx context.Context, management *kcmv1.Management) (requeue bool, err error) {
-	if r.sveltosDependentControllersStarted {
+	if r.dependentControllersStarted {
 		// Only need to start controllers once.
 		return false, nil
 	}
 
-	l := ctrl.LoggerFrom(ctx).WithValues("provider_name", kcmv1.ProviderSveltosName)
+	if r.Manager == nil {
+		// Reconcile was called on a reconciler SetupWithManager never wired up,
+		// so there is no manager to attach the controllers below to. Only
+		// reachable from a test that drives Reconcile directly.
+		return false, nil
+	}
 
-	// WARN: FIXME: (ksm) if sveltos is an optional provider,
-	// absence of it means we will not have both the CLD and MCS controllers at all
+	// Either built-in state management provider is enough: the ClusterDeployment
+	// and MultiClusterService controllers only produce ServiceSets, and which
+	// adapter turns those into a deployment is the ServiceSet's own business.
+	stateManagementProviders := []string{kcmv1.ProviderSveltosName, kcmv1.ProviderArgoCDName}
 
-	if !management.Status.Components[kcmv1.ProviderSveltosName].Success {
-		msg := "Waiting for provider to be ready to setup controllers dependent on it"
-		r.eventf(management, "WaitingForSveltosReadiness", msg)
+	l := ctrl.LoggerFrom(ctx).WithValues("provider_names", stateManagementProviders)
+
+	// A Management that enables none of them has nothing to wait for. That is
+	// not a broken install: the Flux adapter ships inside KCM itself, so there
+	// is no component of its own to become ready. Keyed on the spec, not the
+	// status, which is empty on the first reconcile of a Management that does
+	// enable one.
+	enabled := slices.ContainsFunc(management.Spec.Providers, func(p kcmv1.Provider) bool {
+		return slices.Contains(stateManagementProviders, p.Name)
+	})
+	ready := slices.ContainsFunc(stateManagementProviders, func(name string) bool {
+		return management.Status.Components[name].Success
+	})
+
+	if enabled && !ready {
+		msg := "Waiting for a state management provider to be ready to setup controllers dependent on it"
+		r.eventf(management, "WaitingForStateManagementProviderReadiness", msg)
 		l.Info(msg)
 		return true, nil
 	}
@@ -343,7 +390,7 @@ func (r *ManagementReconciler) startDependentControllers(ctx context.Context, ma
 	}).SetupWithManager(r.Manager); err != nil {
 		return false, fmt.Errorf("failed to setup controller for ClusterDeployment: %w", err)
 	}
-	r.eventf(management, "ClusterDeploymentControllerEnabled", "Sveltos is ready. Enabling ClusterDeployment controller")
+	r.eventf(management, "ClusterDeploymentControllerEnabled", "Dependencies are ready. Enabling ClusterDeployment controller")
 	l.Info("Setup for ClusterDeployment controller successful")
 
 	l.Info("Provider has been successfully installed, so setting up controller for MultiClusterService")
@@ -353,10 +400,10 @@ func (r *ManagementReconciler) startDependentControllers(ctx context.Context, ma
 	}).SetupWithManager(r.Manager); err != nil {
 		return false, fmt.Errorf("failed to setup controller for MultiClusterService: %w", err)
 	}
-	r.eventf(management, "MultiClusterServiceControllerEnabled", "Sveltos is ready. Enabling MultiClusterService controller")
+	r.eventf(management, "MultiClusterServiceControllerEnabled", "Dependencies are ready. Enabling MultiClusterService controller")
 	l.Info("Setup for MultiClusterService controller successful")
 
-	r.sveltosDependentControllersStarted = true
+	r.dependentControllersStarted = true
 	return false, nil
 }
 
@@ -414,9 +461,6 @@ func (r *ManagementReconciler) ensureStateManagementProvider(ctx context.Context
 	currentKcmName := os.Getenv("KCM_NAME")
 
 	const (
-		appsAPIGroupVersion = "apps/v1"
-		deploymentKind      = "Deployment"
-
 		projectSveltosDeploymentName      = "addon-controller"
 		projectSveltosDeploymentNamespace = "projectsveltos"
 		profilesResource                  = "profiles"
@@ -444,23 +488,19 @@ func (r *ManagementReconciler) ensureStateManagementProvider(ctx context.Context
 				},
 			},
 			Adapter: kcmv1.ResourceReference{
-				APIVersion: appsAPIGroupVersion,
-				Kind:       deploymentKind,
-				Name:       currentKcmName,
-				Namespace:  currentNamespace,
-				ReadinessRule: `self.status.availableReplicas == self.status.replicas &&
-self.status.availableReplicas == self.status.updatedReplicas &&
-self.status.availableReplicas == self.status.readyReplicas`,
+				APIVersion:    appsAPIGroupVersion,
+				Kind:          deploymentKind,
+				Name:          currentKcmName,
+				Namespace:     currentNamespace,
+				ReadinessRule: deploymentReadyRule,
 			},
 			Provisioner: []kcmv1.ResourceReference{
 				{
-					APIVersion: appsAPIGroupVersion,
-					Kind:       deploymentKind,
-					Name:       projectSveltosDeploymentName,
-					Namespace:  projectSveltosDeploymentNamespace,
-					ReadinessRule: `self.status.availableReplicas == self.status.replicas &&
-self.status.availableReplicas == self.status.updatedReplicas &&
-self.status.availableReplicas == self.status.readyReplicas`,
+					APIVersion:    appsAPIGroupVersion,
+					Kind:          deploymentKind,
+					Name:          projectSveltosDeploymentName,
+					Namespace:     projectSveltosDeploymentNamespace,
+					ReadinessRule: deploymentReadyRule,
 				},
 			},
 			ProvisionerCRDs: []kcmv1.ProvisionerCRD{
@@ -477,7 +517,186 @@ self.status.availableReplicas == self.status.readyReplicas`,
 		},
 	}
 
-	err := r.Client.Get(ctx, client.ObjectKeyFromObject(stateManagementProvider), stateManagementProvider)
+	return r.createStateManagementProviderIfAbsent(ctx, mgmt, stateManagementProvider)
+}
+
+// ensureArgoCDStateManagementProvider creates the built-in
+// StateManagementProvider backed by the Argo CD adapter, which only means
+// anything once the Argo CD provider is part of the Management.
+func (r *ManagementReconciler) ensureArgoCDStateManagementProvider(ctx context.Context, mgmt *kcmv1.Management) error {
+	l := ctrl.LoggerFrom(ctx).WithValues("provider_name", kcmv1.ProviderArgoCDName)
+
+	if _, defined := mgmt.Status.Components[kcmv1.ProviderArgoCDName]; !defined {
+		return nil
+	}
+
+	l.Info("Ensuring built-in StateManagementProvider for Argo CD is created")
+
+	const (
+		argoCDNamespace             = "argocd"
+		argoCDApplicationController = "argocd-application-controller"
+		argoCDRepoServer            = "argocd-repo-server"
+		applicationsResource        = "applications"
+		appProjectsResource         = "appprojects"
+
+		// The application controller is a StatefulSet, the repo server a
+		// Deployment; both expose readyReplicas, which is all the rule needs -
+		// but neither has the field before the first replica is ready, and a
+		// rule that reads it unguarded fails to evaluate rather than reporting
+		// not-ready.
+		workloadReadyRule = `has(self.status.readyReplicas) && has(self.status.replicas) &&
+self.status.readyReplicas == self.status.replicas`
+	)
+
+	stateManagementProvider := &kcmv1.StateManagementProvider{
+		Name: kubeutil.ArgoCDStateManagementProvider,
+		OwnerReferences: []metav1.OwnerReference{
+			{
+				APIVersion: kcmv1.GroupVersion.String(),
+				Kind:       mgmt.Kind,
+				Name:       mgmt.Name,
+				UID:        mgmt.UID,
+			},
+		},
+		Spec: kcmv1.StateManagementProviderSpec{
+			Selector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{
+					kubeutil.DefaultStateManagementProviderSelectorKey: kubeutil.ArgoCDStateManagementProviderSelectorValue,
+				},
+			},
+			Adapter: kcmv1.ResourceReference{
+				APIVersion:    appsAPIGroupVersion,
+				Kind:          deploymentKind,
+				Name:          os.Getenv("KCM_NAME"),
+				Namespace:     kubeutil.CurrentNamespace(),
+				ReadinessRule: deploymentReadyRule,
+			},
+			Provisioner: []kcmv1.ResourceReference{
+				{
+					APIVersion:    appsAPIGroupVersion,
+					Kind:          "StatefulSet",
+					Name:          argoCDApplicationController,
+					Namespace:     argoCDNamespace,
+					ReadinessRule: workloadReadyRule,
+				},
+				{
+					APIVersion:    appsAPIGroupVersion,
+					Kind:          deploymentKind,
+					Name:          argoCDRepoServer,
+					Namespace:     argoCDNamespace,
+					ReadinessRule: workloadReadyRule,
+				},
+			},
+			ProvisionerCRDs: []kcmv1.ProvisionerCRD{
+				{
+					Group:     "argoproj.io",
+					Version:   "v1alpha1",
+					Resources: []string{applicationsResource, appProjectsResource},
+				},
+			},
+		},
+	}
+
+	return r.createStateManagementProviderIfAbsent(ctx, mgmt, stateManagementProvider)
+}
+
+func (r *ManagementReconciler) createStateManagementProviderIfAbsent(ctx context.Context, mgmt *kcmv1.Management, smp *kcmv1.StateManagementProvider) error {
+	err := r.Client.Get(ctx, client.ObjectKeyFromObject(smp), new(kcmv1.StateManagementProvider))
+	if client.IgnoreNotFound(err) != nil {
+		return fmt.Errorf("failed to get %s StateManagementProvider object: %w", smp.GetName(), err)
+	}
+	if err == nil {
+		return nil
+	}
+
+	if err = r.Client.Create(ctx, smp); err != nil {
+		err = fmt.Errorf("failed to create %s StateManagementProvider object: %w", smp.GetName(), err)
+		r.warnf(mgmt, "StateManagementProviderCreateFailed", err.Error())
+		return err
+	}
+
+	ctrl.LoggerFrom(ctx).Info("Successfully created StateManagementProvider object", "name", smp.GetName())
+	r.eventf(mgmt, "StateManagementProviderCreated", "Created %s StateManagementProvider object", smp.GetName())
+	return nil
+}
+
+// ensureFluxStateManagementProvider creates the StateManagementProvider served
+// by the built-in Flux adapter. Unlike the sveltos one it is not the default:
+// a ServiceSet reaches it only by naming it in .spec.provider.name.
+func (r *ManagementReconciler) ensureFluxStateManagementProvider(ctx context.Context, mgmt *kcmv1.Management) error {
+	l := ctrl.LoggerFrom(ctx).WithValues("provider_name", kubeutil.FluxStateManagementProvider)
+
+	l.Info("Ensuring built-in StateManagementProvider for Flux is created")
+	currentNamespace := kubeutil.CurrentNamespace()
+	currentKcmName := os.Getenv("KCM_NAME")
+
+	const (
+		appsAPIGroupVersion = "apps/v1"
+		deploymentKind      = "Deployment"
+
+		helmControllerDeploymentName   = "helm-controller"
+		sourceControllerDeploymentName = "source-controller"
+
+		deploymentReadinessRule = `self.status.availableReplicas == self.status.replicas &&
+self.status.availableReplicas == self.status.updatedReplicas &&
+self.status.availableReplicas == self.status.readyReplicas`
+	)
+
+	stateManagementProvider := &kcmv1.StateManagementProvider{
+		Name: kubeutil.FluxStateManagementProvider,
+		OwnerReferences: []metav1.OwnerReference{
+			{
+				APIVersion: kcmv1.GroupVersion.String(),
+				Kind:       mgmt.Kind,
+				Name:       mgmt.Name,
+				UID:        mgmt.UID,
+			},
+		},
+		Spec: kcmv1.StateManagementProviderSpec{
+			Selector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{
+					kubeutil.DefaultStateManagementProviderSelectorKey: kubeutil.FluxStateManagementProviderSelectorValue,
+				},
+			},
+			Adapter: kcmv1.ResourceReference{
+				APIVersion:    appsAPIGroupVersion,
+				Kind:          deploymentKind,
+				Name:          currentKcmName,
+				Namespace:     currentNamespace,
+				ReadinessRule: deploymentReadinessRule,
+			},
+			Provisioner: []kcmv1.ResourceReference{
+				{
+					APIVersion:    appsAPIGroupVersion,
+					Kind:          deploymentKind,
+					Name:          helmControllerDeploymentName,
+					Namespace:     currentNamespace,
+					ReadinessRule: deploymentReadinessRule,
+				},
+				{
+					APIVersion:    appsAPIGroupVersion,
+					Kind:          deploymentKind,
+					Name:          sourceControllerDeploymentName,
+					Namespace:     currentNamespace,
+					ReadinessRule: deploymentReadinessRule,
+				},
+			},
+			ProvisionerCRDs: []kcmv1.ProvisionerCRD{
+				{
+					Group:     helmcontrollerv2.GroupVersion.Group,
+					Version:   helmcontrollerv2.GroupVersion.Version,
+					Resources: []string{"helmreleases"},
+				},
+				{
+					Group:     sourcev1.GroupVersion.Group,
+					Version:   sourcev1.GroupVersion.Version,
+					Resources: []string{"helmcharts", "helmrepositories"},
+				},
+			},
+		},
+	}
+
+	err := r.Client.Get(ctx, client.ObjectKeyFromObject(stateManagementProvider), new(kcmv1.StateManagementProvider))
 	if client.IgnoreNotFound(err) != nil {
 		return fmt.Errorf("failed to get %s StateManagementProvider object: %w", stateManagementProvider.GetName(), err)
 	}
