@@ -403,6 +403,10 @@ kind-deploy: kind ## Create a kind cluster if it does not exist.
 # ImagePullBackOff until the suite gives up on the whole Management. Side-loaded
 # images are already present, so kubelet never asks.
 PRELOAD_CHARTS ?= argocd
+# One platform, not the whole index: with the containerd image store docker
+# keeps the attestation manifests too, and importing those into the node fails
+# on blobs the host never pulled ("content digest ... not found").
+PRELOAD_PLATFORM ?= linux/$(HOSTARCH)
 
 .PHONY: kind-preload
 kind-preload: kind helm ## Pull the images $(PRELOAD_CHARTS) render and load them into the kind cluster.
@@ -413,13 +417,14 @@ kind-preload: kind helm ## Pull the images $(PRELOAD_CHARTS) render and load the
 				| sed -n 's/^[[:space:]]*image:[[:space:]]*"\?\([^"[:space:]]*\)"\?[[:space:]]*$$/\1/p' \
 				| sort -u); do \
 			echo "Preloading $$image"; \
-			$(CONTAINER_TOOL) pull -q "$$image" >/dev/null || { \
-				echo "WARNING: could not pull $$image, leaving it to the kubelet"; continue; }; \
-			if [ "$(CONTAINER_TOOL)" = "podman" ]; then \
-				$(KIND) load image-archive --name $(KIND_CLUSTER_NAME) <($(CONTAINER_TOOL) save "$$image"); \
-			else \
-				$(KIND) load docker-image "$$image" --name $(KIND_CLUSTER_NAME); \
+			archive=$$(mktemp); \
+			if $(CONTAINER_TOOL) pull -q "$$image" >/dev/null \
+				&& { $(CONTAINER_TOOL) save --platform $(PRELOAD_PLATFORM) -o "$$archive" "$$image" 2>/dev/null \
+					|| $(CONTAINER_TOOL) save -o "$$archive" "$$image"; } \
+				&& $(KIND) load image-archive --name $(KIND_CLUSTER_NAME) "$$archive"; then :; else \
+				echo "WARNING: could not preload $$image, leaving it to the kubelet"; \
 			fi; \
+			rm -f "$$archive"; \
 		done; \
 	done
 
