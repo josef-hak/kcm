@@ -70,10 +70,10 @@ jobs:
         # what this branch adds; sveltos is what must not regress. One job per
         # adapter rather than a workflow each, so a change to the pipeline
         # cannot be made for one and forgotten for the others.
-        # WIP: flux alone while that adapter is what changes -- three adapters
+        # WIP: argo alone while that adapter is what changes -- three adapters
         # times every scenario is more API quota than the iteration is worth.
         # Back to [sveltos, argo, flux] before this is proposed upstream.
-        provider: [flux]
+        provider: [argo]
     # WIP: the fork branch, not the pinned tag -- the new adapters need the
     # KSM_PROVIDER plumbing that only exists there. Back to k0rdent/ksm-tests
     # at a tag before this is proposed upstream.
