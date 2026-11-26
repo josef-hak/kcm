@@ -11,6 +11,50 @@
           "properties": {
             "enabled": {
               "type": "boolean"
+            },
+            "manager": {
+              "type": "object",
+              "properties": {
+                "image": {
+                  "type": "object",
+                  "properties": {
+                    "registry": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "addonController": {
+          "type": "object",
+          "properties": {
+            "controller": {
+              "type": "object",
+              "properties": {
+                "image": {
+                  "type": "object",
+                  "properties": {
+                    "registry": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            },
+            "initialization": {
+              "type": "object",
+              "properties": {
+                "image": {
+                  "type": "object",
+                  "properties": {
+                    "registry": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
             }
           }
         },
@@ -22,6 +66,96 @@
             }
           }
         },
+        "classifierManager": {
+          "type": "object",
+          "properties": {
+            "manager": {
+              "type": "object",
+              "properties": {
+                "image": {
+                  "type": "object",
+                  "properties": {
+                    "registry": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "clusterInventory": {
+          "type": "object",
+          "properties": {
+            "manager": {
+              "type": "object",
+              "properties": {
+                "image": {
+                  "type": "object",
+                  "properties": {
+                    "registry": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "crdManagerJob": {
+          "type": "object",
+          "properties": {
+            "crdManager": {
+              "type": "object",
+              "properties": {
+                "image": {
+                  "type": "object",
+                  "properties": {
+                    "registry": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "eventManager": {
+          "type": "object",
+          "properties": {
+            "manager": {
+              "type": "object",
+              "properties": {
+                "image": {
+                  "type": "object",
+                  "properties": {
+                    "registry": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "hcManager": {
+          "type": "object",
+          "properties": {
+            "manager": {
+              "type": "object",
+              "properties": {
+                "image": {
+                  "type": "object",
+                  "properties": {
+                    "registry": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
         "mcpServer": {
           "type": "object",
           "properties": {
@@ -30,11 +164,60 @@
             }
           }
         },
+        "registerMgmtClusterJob": {
+          "type": "object",
+          "properties": {
+            "registerMgmtCluster": {
+              "type": "object",
+              "properties": {
+                "image": {
+                  "type": "object",
+                  "properties": {
+                    "registry": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "scManager": {
+          "type": "object",
+          "properties": {
+            "manager": {
+              "type": "object",
+              "properties": {
+                "image": {
+                  "type": "object",
+                  "properties": {
+                    "registry": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
         "shardController": {
           "type": "object",
           "properties": {
             "enabled": {
               "type": "boolean"
+            },
+            "manager": {
+              "type": "object",
+              "properties": {
+                "image": {
+                  "type": "object",
+                  "properties": {
+                    "registry": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
             }
           }
         },
